@@ -1,0 +1,8 @@
+{
+  "schedule": "0 * * * * *",
+  "chainSelectorName": "monad-mainnet",
+  "poolsAddress": "0xFILL_AFTER_DEPLOY",
+  "feeds": { "0": "0xFILL_CHAINLINK_FEED_ADDRESS_FOR_ASSET_0" },
+  "lookback": 20,
+  "gasLimit": "300000"
+}

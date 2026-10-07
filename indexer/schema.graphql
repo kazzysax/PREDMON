@@ -1,0 +1,57 @@
+type Market {
+  id: ID!
+  creator: String!
+  category: Int!
+  termsHash: String!
+  locksAt: Int!
+  closesAt: Int!
+  state: String!        # open | proposed | finalized | void
+  outcome: Int!
+  yesWeight: BigInt!
+  noWeight: BigInt!
+  voteCount: Int!
+  createdAt: Int!
+}
+
+type Position {
+  id: ID!               # marketId-voter
+  market: String!
+  voter: String!
+  yes: Boolean!
+  staked: BigInt!
+  claimed: BigInt!
+  repDelta: BigInt!
+  scored: Boolean!
+}
+
+type Pool {
+  id: ID!
+  creator: String!
+  asset: Int!
+  entryAmount: BigInt!
+  lockTime: Int!
+  resultTime: Int!
+  entryCount: Int!
+  revealedCount: Int!
+  price: BigInt
+  voided: Boolean!
+}
+
+type PoolEntry {
+  id: ID!               # poolId-entryId
+  pool: String!
+  entryId: Int!
+  entrant: String!
+  guess: BigInt
+  repDelta: BigInt
+  paid: BigInt!
+}
+
+type Reputation {
+  id: ID!               # user-category
+  user: String!
+  category: Int!
+  score: BigInt!        # x100
+  scored: Int!
+  won: Int!
+}

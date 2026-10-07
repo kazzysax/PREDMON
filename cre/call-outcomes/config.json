@@ -1,0 +1,6 @@
+{
+  "chainSelectorName": "monad-mainnet",
+  "callsAddress": "0xFILL_AFTER_DEPLOY",
+  "authorizedKey": "0xFILL_BACKEND_KEY_ADDRESS",
+  "gasLimit": "300000"
+}

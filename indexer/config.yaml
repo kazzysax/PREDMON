@@ -1,0 +1,39 @@
+# Envio HyperIndex config for PredMon on Monad mainnet.
+# Fill the three addresses and start_block from shared/addresses.json after deploying.
+name: predmon
+networks:
+  - id: 143
+    start_block: 0   # set to the deploy block
+    contracts:
+      - name: Calls
+        address:
+          - 0x0000000000000000000000000000000000000000
+        handler: src/EventHandlers.ts
+        events:
+          - event: Claimed(uint256 indexed id, address indexed voter, uint256 amount)
+          - event: Finalized(uint256 indexed id, uint8 outcome, uint256 yesWeight, uint256 noWeight)
+          - event: MarketCreated(uint256 indexed id, address indexed creator, uint8 category, bytes32 termsHash, uint64 locksAt, uint64 closesAt)
+          - event: OutcomeCorrected(uint256 indexed id, uint8 outcome, uint64 finalizableAt)
+          - event: OutcomeProposed(uint256 indexed id, uint8 outcome, uint64 finalizableAt)
+          - event: Scored(uint256 indexed id, address indexed voter, bool won, int256 repDelta)
+          - event: Staked(uint256 indexed id, address indexed voter, bool yes, uint256 amount)
+          - event: Voided(uint256 indexed id)
+          - event: Voted(uint256 indexed id, address indexed voter, bool yes, uint256 weightBps)
+      - name: Pools
+        address:
+          - 0x0000000000000000000000000000000000000000
+        handler: src/EventHandlers.ts
+        events:
+          - event: Claimed(uint256 indexed id, uint256 indexed entryId, address indexed entrant, uint256 amount)
+          - event: Entered(uint256 indexed id, uint256 indexed entryId, address indexed entrant, bytes32 commitment)
+          - event: EntryScored(uint256 indexed id, uint256 indexed entryId, address indexed entrant, int256 repDelta, bool won)
+          - event: PoolCreated(uint256 indexed id, address indexed creator, uint8 asset, uint256 entryAmount, uint64 lockTime, uint64 resultTime)
+          - event: PoolVoided(uint256 indexed id)
+          - event: PriceReported(uint256 indexed id, uint256 price, uint64 priceTimestamp)
+          - event: Revealed(uint256 indexed id, uint256 indexed entryId, address indexed entrant, uint256 guess)
+      - name: Reputation
+        address:
+          - 0x0000000000000000000000000000000000000000
+        handler: src/EventHandlers.ts
+        events:
+          - event: RepChanged(address indexed user, uint8 indexed category, int256 delta, int256 newScore, bool won)
