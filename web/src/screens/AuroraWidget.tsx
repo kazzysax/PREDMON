@@ -10,6 +10,8 @@ export default function AuroraWidget({ address }: { address: string }) {
       config={{
         apiKey: AURORA_KEY,
         sendAddress: address,
+        // Deposit mode needs the destination spelled out: MON on Monad, sent to the in-app wallet.
+        defaultTargetToken: { symbol: 'MON', blockchain: 'monad' },
         // Pay from a browser wallet if there is one, or scan a QR code from any wallet.
         connectedWallets: {},
         providers: injected ? { evm: injected } : {},

@@ -1,3 +1,4 @@
+import './polyfill';
 import '@fontsource/geist-sans/700';
 import '@fontsource/geist-sans/400';
 import '@fontsource/geist-sans/500';
