@@ -2,7 +2,7 @@
 // who it is can be trusted; everything comes from the verified token.
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
-export function dynamicVerifier(environmentId) {
+export function dynamicVerifier(environmentId, fetchImpl = fetch) {
   if (!environmentId) throw new Error('DYNAMIC_ENVIRONMENT_ID is not set');
   const jwks = createRemoteJWKSet(
     new URL(`https://app.dynamicauth.com/api/v0/sdk/${environmentId}/.well-known/jwks`));
@@ -12,7 +12,25 @@ export function dynamicVerifier(environmentId) {
     const scopes = String(payload.scope ?? '').split(' ');
     if (!scopes.includes('user:basic')) throw new Error('token lacks user:basic scope');
     if (payload.environment_id && payload.environment_id !== environmentId) throw new Error('wrong environment');
-    return normalizeClaims(payload);
+    // A "minified" token carries only a hash of the credentials. The token is already verified above,
+    // so ask Dynamic for this user's credentials with it; the answer comes straight from Dynamic.
+    if (!Array.isArray(payload.verified_credentials)) {
+      const res = await fetchImpl(`https://app.dynamicauth.com/api/v0/sdk/${environmentId}/me`, { headers: { authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`could not read the account from Dynamic (${res.status})`);
+      const me = await res.json();
+      const user = me.user ?? me;
+      if (user.id && String(user.id) !== String(payload.sub)) throw new Error('account does not match the token');
+      payload.verified_credentials = (user.verifiedCredentials ?? user.verified_credentials ?? []).map(c => ({
+        ...c,
+        wallet_provider: c.wallet_provider ?? c.walletProvider ?? c.walletName,
+        oauth_provider: c.oauth_provider ?? c.oauthProvider,
+        oauth_username: c.oauth_username ?? c.oauthUsername ?? c.oauthDisplayName,
+        oauth_display_name: c.oauth_display_name ?? c.oauthDisplayName,
+      }));
+    }
+    const n = normalizeClaims(payload);
+    if (!n.wallets.length) console.log('no wallet in credentials; shapes', JSON.stringify((payload.verified_credentials ?? []).map(c => ({ format: c.format, chain: c.chain ?? null, provider: c.wallet_provider ?? null, keys: Object.keys(c).slice(0, 14) }))));
+    return n;
   };
 }
 
