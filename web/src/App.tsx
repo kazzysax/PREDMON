@@ -1,7 +1,7 @@
 // The real app: Dynamic sign-in, wallet bootstrap, then the shell.
 import { useEffect, useState } from 'react';
 import { DynamicProvider, useUser, useGetWalletAccounts, useGetUserSocialAccounts } from '@dynamic-labs-sdk/react-hooks';
-import { logout, signInWithSocialRedirect } from '@dynamic-labs-sdk/client';
+import { logout, signInWithSocialRedirect, refreshAuth } from '@dynamic-labs-sdk/client';
 import { api, setTokenGetter } from './api';
 import { AppCtx, type Config, type Me } from './ctx';
 import { dynamicClient, ensureWallet } from './dynamic';
@@ -35,7 +35,14 @@ function Inner() {
 
   const reloadMe = async () => {
     if (!account) return;
-    try { setMe(await api<Me>(`/api/me?wallet=${account.address}`)); setError(''); } catch (e: any) { setError(e.message); }
+    const load = () => api<Me>(`/api/me?wallet=${account.address}`);
+    try { setMe(await load()); setError(''); } catch (e: any) {
+      // A new in-app wallet is not in the sign-in token yet. Get a fresh token and try once more.
+      if (/not on your account/i.test(e.message)) {
+        try { await refreshAuth(); setMe(await load()); setError(''); return; } catch (e2: any) { setError(e2.message); return; }
+      }
+      setError(e.message);
+    }
   };
   useEffect(() => { if (user.data && account) reloadMe(); }, [user.data?.id, account?.address]);
 

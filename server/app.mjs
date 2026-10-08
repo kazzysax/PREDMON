@@ -21,7 +21,10 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
 
   function upsertUser(claims, wantedWallet) {
     let wallet = wantedWallet ? lc(wantedWallet) : null;
-    if (wallet && !claims.wallets.some(w => w.address === wallet)) throw httpError(400, 'that wallet is not on your account');
+    if (wallet && !claims.wallets.some(w => w.address === wallet)) {
+      console.log('wallet mismatch: asked for', wallet.slice(0, 8), 'token has', JSON.stringify(claims.wallets.map(w => w.address.slice(0, 8))), 'raw credentials', JSON.stringify(claims.debug ?? null));
+      throw httpError(400, 'that wallet is not on your account');
+    }
     if (!wallet) wallet = (claims.wallets.find(w => w.embedded) ?? claims.wallets[0])?.address;
     if (!wallet) throw httpError(400, 'your account has no wallet yet');
     const existing = db.prepare('SELECT * FROM users WHERE id=?').get(claims.userId);

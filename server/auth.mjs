@@ -28,6 +28,7 @@ export function normalizeClaims(p) {
     email: p.email ?? null,
     wallets,
     xUsername: x?.oauth_username ?? x?.oauth_display_name ?? null,
+    debug: creds.map(c => ({ format: c.format, chain: c.chain ?? null, provider: c.wallet_provider ?? c.walletName ?? null })),
   };
 }
 
