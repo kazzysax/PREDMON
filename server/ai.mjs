@@ -49,9 +49,33 @@ Rules:
 - If the evidence is missing, conflicting, or the terms cannot be applied cleanly, answer VOID. Never guess.
 - Cite at least one source for YES or NO.`;
 
-export function createAi({ apiKey, model, fetchImpl = fetch }) {
+export function createAi({ apiKey, model, openrouterKey = '', openrouterModel = 'google/gemini-2.5-flash', fetchImpl = fetch }) {
+  // Two providers, same prompts. OpenRouter is used when its key is set (cheap models); otherwise Anthropic directly.
+  async function askOpenRouter(system, user, { search = false } = {}) {
+    const body = {
+      model: openrouterModel, max_tokens: 3000, temperature: 0,
+      reasoning: { effort: 'low' },
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    };
+    if (search) body.plugins = [{ id: 'web', max_results: 5 }];
+    const res = await fetchImpl('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${openrouterKey}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`AI request failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+    const data = await res.json();
+    const msg = data.choices?.[0]?.message ?? {};
+    let text = typeof msg.content === 'string' ? msg.content : '';
+    // Web search results arrive as url_citation annotations; hand them to the model's own JSON via the text, and keep them as a fallback.
+    const cites = (msg.annotations ?? []).filter(a => a.type === 'url_citation').map(a => a.url_citation).filter(Boolean);
+    if (cites.length) text += `\n\n[sources: ${JSON.stringify(cites.slice(0, 6).map(c => ({ title: c.title ?? '', url: c.url })))}]`;
+    return text;
+  }
+
   async function ask(system, user, { search = false } = {}) {
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
+    if (openrouterKey) return askOpenRouter(system, user, { search });
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY or OPENROUTER_API_KEY is not set');
     const body = {
       model, max_tokens: 1500, system,
       messages: [{ role: 'user', content: user }],

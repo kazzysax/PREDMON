@@ -1,0 +1,9 @@
+node_modules
+web
+contracts
+artifacts
+test
+scripts
+.env
+data
+.git

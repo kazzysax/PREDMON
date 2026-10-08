@@ -5,19 +5,20 @@
   "main": "index.js",
   "scripts": {
     "test": "node scripts/compile.mjs && node --test test/*.test.mjs",
-    "compile": "node scripts/compile.mjs"
+    "compile": "node scripts/compile.mjs",
+    "start": "node server/index.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "ethers": "^6.17.0",
     "hardhat": "^2.29.1",
     "solc": "^0.8.28"
   },
   "type": "module",
   "private": true,
   "dependencies": {
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "ethers": "^6.17.0"
   }
 }

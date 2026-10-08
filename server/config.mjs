@@ -1,11 +1,12 @@
 // All settings come from the environment so nothing secret lives in the repo.
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const env = process.env;
 const need = (k) => { if (!env[k]) throw new Error(`missing env ${k}`); return env[k]; };
 
 export function loadConfig(overrides = {}) {
-  const addrFile = env.ADDRESSES_FILE || new URL('../shared/addresses.json', import.meta.url).pathname;
+  const addrFile = env.ADDRESSES_FILE || fileURLToPath(new URL('../shared/addresses.json', import.meta.url));
   let addresses = {};
   try { addresses = JSON.parse(fs.readFileSync(addrFile, 'utf8')); } catch { /* not deployed yet */ }
   return {
@@ -17,6 +18,8 @@ export function loadConfig(overrides = {}) {
     dynamicEnvId: env.DYNAMIC_ENVIRONMENT_ID || '',
     anthropicKey: env.ANTHROPIC_API_KEY || '',
     anthropicModel: env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
+    openrouterKey: env.OPENROUTER_API_KEY || '',
+    openrouterModel: env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
     // One key per role. The same key may fill several roles on a small deployment.
     gateKey: env.GATE_KEY || '',                  // opens markets (Calls.gate)
     settlerKey: env.SETTLER_KEY || '',            // posts results (Base.settler)
