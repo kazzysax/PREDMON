@@ -15,7 +15,7 @@ export function dynamicVerifier(environmentId, fetchImpl = fetch) {
     // A "minified" token carries only a hash of the credentials. The token is already verified above,
     // so ask Dynamic for this user's credentials with it; the answer comes straight from Dynamic.
     if (!Array.isArray(payload.verified_credentials)) {
-      const res = await fetchImpl(`https://app.dynamicauth.com/api/v0/sdk/${environmentId}/me`, { headers: { authorization: `Bearer ${token}` } });
+      const res = await fetchImpl(`https://app.dynamicauth.com/api/v0/sdk/${environmentId}/users`, { headers: { authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`could not read the account from Dynamic (${res.status})`);
       const me = await res.json();
       const user = me.user ?? me;
