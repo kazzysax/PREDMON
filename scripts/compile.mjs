@@ -15,7 +15,7 @@ const walk = dir => {
     const full = path.join(dir, f);
     if (fs.statSync(full).isDirectory()) walk(full);
     else if (f.endsWith('.sol')) {
-      sources[path.relative(contractsDir, full)] = { content: fs.readFileSync(full, 'utf8') };
+      sources[path.relative(contractsDir, full).split(path.sep).join('/')] = { content: fs.readFileSync(full, 'utf8') };
     }
   }
 };
