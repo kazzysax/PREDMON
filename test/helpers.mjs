@@ -38,7 +38,7 @@ export async function warpTo(ts) {
 }
 
 const iface = new ethers.Interface([
-  ...abiOf('Calls'), ...abiOf('Pools'), ...abiOf('Reputation'),
+  ...abiOf('Calls'), ...abiOf('Pools'), ...abiOf('Reputation'), ...abiOf('Prizes'),
 ].filter((f, i, a) => a.findIndex(g => g.type === f.type && g.name === f.name && JSON.stringify(g.inputs) === JSON.stringify(f.inputs)) === i));
 
 /** Asserts a promise rejects with the named custom error. */
