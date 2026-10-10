@@ -58,7 +58,7 @@ mark { background: none; color: inherit; }
 .logo.xl { height: 44px; font-size: 22px; padding: 0 16px 1px; align-self: flex-start; }
 .top-right { display: flex; gap: 6px; }
 .balance { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 13px; border-radius: var(--r-sm); background: var(--card); font-weight: 500; font-size: 14px; }
-.balance svg { width: 17px; height: 17px; stroke-width: 1.7; }
+.balance img { width: 22px; height: 22px; border-radius: 50%; display: block; }
 .balance span { color: var(--muted); font-weight: 400; }
 
 /* filters */

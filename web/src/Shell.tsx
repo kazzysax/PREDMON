@@ -40,7 +40,7 @@ export function Shell({ initialTab = 'calls' as Tab, initialCompose = false }) {
       <div className="top">
         <Wordmark />
         <div className="top-right">
-          <button className="balance" onClick={() => go('wallet')} aria-label="Wallet"><Icon name="wallet" />{balance === '' ? '…' : trimNum(balance)}<span>MON</span></button>
+          <button className="balance" onClick={() => go('wallet')} aria-label="Wallet"><img src="/monad.png" alt="Monad" width="22" height="22" />{balance === '' ? '…' : trimNum(balance)}</button>
         </div>
       </div>
 
