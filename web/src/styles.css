@@ -292,3 +292,17 @@ textarea.in { min-height: 170px; line-height: 1.5; resize: none; font-size: 16px
 .tipinfo .sent b { display: block; font-size: 17px; font-weight: 500; }
 .amounts.wrap { display: flex; flex-wrap: wrap; }
 .amounts.wrap button { flex: 1 0 auto; padding: 0 14px; }
+
+.wtile.rep { border-color: rgba(62, 207, 142, 0.4); }
+.wtile.hit { border-color: rgba(131, 110, 249, 0.45); }
+.ring2 { --p: 0deg; width: 84px; height: 84px; margin: 8px auto 4px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--yes) var(--p), rgba(255,255,255,0.08) 0); position: relative; }
+.ring2::before { content: ''; position: absolute; inset: 7px; border-radius: 50%; background: #191716; }
+.ring2 b { position: relative; font-size: 20px; font-weight: 500; letter-spacing: -0.03em; }
+.tipinfo .mid { text-align: center; }
+.tipinfo .mid b { display: block; font-size: 32px; font-weight: 500; letter-spacing: -0.04em; line-height: 1; }
+.tipinfo .mid span { font-size: 12px; color: var(--muted); }
+.tipinfo .sent b { font-size: 32px; letter-spacing: -0.04em; line-height: 1; color: var(--no); }
+.tipinfo { justify-content: space-between; }
+.rep-row .track { flex: 0 0 72px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.rep-row .track i { display: block; height: 100%; background: var(--yes); border-radius: 3px; }

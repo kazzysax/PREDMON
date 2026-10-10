@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApp } from '../ctx';
 import { callsAbi, publicClient } from '../chain';
 import { sendAndWait } from '../wallet';
-import { Avatar, Verified, trimNum } from '../ui';
+import { Avatar, Icon, Verified, trimNum } from '../ui';
 
 export function Profile() {
   const { me, config, account, hasX, linkX, signOut, preview } = useApp();
@@ -21,6 +21,7 @@ export function Profile() {
   const totalWon = me.reputation.reduce((a, r) => a + r.won, 0);
   const max = Math.max(10, ...me.reputation.map(r => Math.abs(r.score)));
 
+  const rate = totalScored ? Math.round((totalWon / totalScored) * 100) : 0;
   const best = [...me.reputation].sort((x, y) => y.score - x.score)[0];
 
   return (
@@ -33,15 +34,23 @@ export function Profile() {
         </div>
       </div>
 
-      <div className="card plain">
-        <span className="cap">Reputation in {best.name}</span>
-        <div className="num" style={{ fontSize: 72 }}>{best.score.toFixed(1)}</div>
+      <div className="wtiles">
+        <div className="wtile rep">
+          <div className="wtop"><span className="wbadge g"><Icon name="ranks" /></span><span className="wlabel">Best reputation</span></div>
+          <div className="wbig">{best ? best.score.toFixed(1) : '0.0'}</div>
+          <div className="wunit">{best ? best.name : 'No calls yet'}</div>
+        </div>
+        <div className="wtile hit">
+          <div className="wtop"><span className="wbadge"><Icon name="check" /></span><span className="wlabel">Hit rate</span></div>
+          <div className="ring2" style={{ ['--p' as any]: `${rate * 3.6}deg` }}><b>{rate}%</b></div>
+          <div className="wunit">{totalWon} of {totalScored} calls right</div>
+        </div>
       </div>
-      <div className="stats">
-        <div><b>{totalScored}</b><span>Played</span></div>
-        <div><b>{totalWon}</b><span>Wins</span></div>
-        <div><b>{totalScored - totalWon}</b><span>Losses</span></div>
-        <div><b>{totalScored ? Math.round((totalWon / totalScored) * 100) : 0}%</b><span>Hit rate</span></div>
+
+      <div className="group tipinfo">
+        <div className="lead"><b>{totalScored}</b><span>Played</span></div>
+        <div className="mid"><b>{totalWon}</b><span>Wins</span></div>
+        <div className="sent"><b>{totalScored - totalWon}</b><span>Losses</span></div>
       </div>
 
       {fees > 0n && (
@@ -55,10 +64,10 @@ export function Profile() {
       )}
 
       <p className="heading">Reputation</p>
-      <div className="list">
+      <div className="group">
         {me.reputation.map(r => (
-          <div key={r.category} className="item">
-            <div className="grow"><div className="name">{r.name}</div><div className="sub">{r.won} wins · {r.scored} played</div></div>
+          <div key={r.category} className="grow rep-row">
+            <span className="gm"><b>{r.name}</b><span>{r.won} wins · {r.scored} played</span></span>
             <div className="track"><i style={{ width: `${r.score > 0 ? Math.max(4, (r.score / max) * 100) : 0}%` }} /></div>
             <span className="val" style={{ minWidth: 58, textAlign: 'right' }}>{r.score > 0 ? '+' : ''}{r.score.toFixed(1)}</span>
           </div>
