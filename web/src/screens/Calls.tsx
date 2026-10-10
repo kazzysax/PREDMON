@@ -100,8 +100,8 @@ function Composer({ onCreated, onClose }: { onCreated: () => void; onClose: () =
 
   return (
     <Sheet onClose={onClose}>
-      <h2 className="h2">What do you want to be right about?</h2>
-      <p className="lede">Say it however you like — your words are what gets posted. We'll show you how it settles before it goes up.</p>
+      <h2 className="h2">Make your post. <em>See what people have to say.</em></h2>
+      <p className="lede">Write it the way you would say it. Others vote and back it with MON, and you watch where the room stands. We show you how it settles before it goes up.</p>
       <textarea className="in" value={post} onChange={e => setPost(e.target.value)} maxLength={1500} autoFocus
         placeholder="good morning, what do you reckon BTC does in the next hour?" aria-label="Your call" />
       <div>
