@@ -41,6 +41,23 @@ Rules:
 - Set ok=false, with a short reason, if it is about a private individual, asks for harm, is unverifiable, is about something that already happened, or cannot be fixed into precise terms.
 - Keep each field under 300 characters. Do not mention that you are an AI.`;
 
+const NUMBER_SYSTEM = `A person wants to open a pool where everyone guesses ONE NUMBER and the closest guess wins. Check their question and tidy it.
+Reply with ONE JSON object and nothing else:
+{"ok": boolean, "reason": string, "question": string, "unit": string, "source": string}
+Rules:
+- The answer must be a single number that a public, checkable source will show at a known time (a price, a score, a count, a temperature, a date expressed as a number of days). Opinions and yes/no questions are not allowed: set ok=false with a short reason.
+- "question" is a clear restatement that names exactly what is measured and exactly when (include the timezone).
+- "unit" is a short label for the number, such as "USD", "goals", "points", "degrees C", "days". Under 20 characters.
+- "source" names the public source that will settle it. Under 200 characters.
+- Set ok=false if it is about a private individual, asks for harm, or cannot be settled by a public source. Do not mention that you are an AI.`;
+
+const NUMBER_RESOLVE_SYSTEM = `You settle a numeric question after its result time, using only evidence you can find from reliable public sources.
+Reply with ONE JSON object and nothing else:
+{"value": number|null, "reasoning": string, "evidence": [{"title": string, "url": string}]}
+Rules:
+- "value" is the single number the question asks for, as a plain number in the stated unit (no units or commas). Use null if the result is not yet available, is disputed, or cannot be found. Never guess.
+- Cite at least one source whenever value is not null.`;
+
 const RESOLVE_SYSTEM = `You settle a yes/no prediction call after it closed, using only evidence you can find from reliable public sources.
 Reply with ONE JSON object and nothing else:
 {"outcome": "YES"|"NO"|"VOID", "reasoning": string, "evidence": [{"title": string, "url": string}]}
@@ -99,6 +116,20 @@ export function createAi({ apiKey, model, openrouterKey = '', openrouterModel = 
       try { out = firstJson(text); } catch { return { ok: false, reason: 'Could not turn that into a clear call. Try rephrasing.' }; }
       return validateGate(out);
     },
+    /** Checks a numeric pool question. Returns {ok, reason, terms:{question,unit,source}}. */
+    async numberGate(question, resultIso, nowIso = new Date().toISOString()) {
+      const text = await ask(NUMBER_SYSTEM, `Now: ${nowIso}\nThe result is read at: ${resultIso}\nQuestion:\n${question}`);
+      let out;
+      try { out = firstJson(text); } catch { return { ok: false, reason: 'Could not turn that into a clear numeric question. Try rephrasing.' }; }
+      return validateNumberGate(out);
+    },
+    /** Returns {value: number|null, reasoning, evidence}. Throws when the model could not be reached. */
+    async resolveNumber(terms, resultIso) {
+      const text = await ask(NUMBER_RESOLVE_SYSTEM, `Read at: ${resultIso}\nQuestion:\n${JSON.stringify(terms, null, 2)}`, { search: true });
+      let out;
+      try { out = firstJson(text); } catch { return { value: null, reasoning: 'Unreadable answer', evidence: [] }; }
+      return validateNumberResolution(out);
+    },
     /** Returns {outcome: 1|2|3, reasoning, evidence}. Throws when the model could not be reached. */
     async resolve(terms, closesAtIso) {
       const text = await ask(RESOLVE_SYSTEM, `Closed at: ${closesAtIso}\nTerms:\n${JSON.stringify(terms, null, 2)}`, { search: true });
@@ -118,6 +149,25 @@ export function validateGate(out) {
   const terms = Object.fromEntries(fields.map(f => [f, t[f].trim().slice(0, 400)]));
   const highlight = typeof out.highlight === 'string' ? out.highlight : '';
   return { ok: true, reason: '', highlight, terms: { ...terms, category } };
+}
+
+export function validateNumberGate(out) {
+  if (!out || out.ok !== true) return { ok: false, reason: String(out?.reason ?? 'That cannot be settled as a single number.').slice(0, 300) };
+  const f = { question: 5, unit: 1, source: 3 };
+  for (const [k, min] of Object.entries(f)) if (typeof out[k] !== 'string' || out[k].trim().length < min) return { ok: false, reason: 'The question was incomplete. Try rephrasing.' };
+  return { ok: true, reason: '', terms: { question: out.question.trim().slice(0, 400), unit: out.unit.trim().slice(0, 20), source: out.source.trim().slice(0, 200) } };
+}
+
+export function validateNumberResolution(out) {
+  const v = Number(out?.value);
+  const evidence = Array.isArray(out?.evidence)
+    ? out.evidence.filter(e => e && typeof e.url === 'string').slice(0, 6).map(e => ({ title: String(e.title ?? '').slice(0, 200), url: e.url }))
+    : [];
+  // A number with no source behind it is not good enough.
+  if (out?.value === null || out?.value === undefined || !Number.isFinite(v) || v < 0 || v > 1e12 || evidence.length === 0) {
+    return { value: null, reasoning: String(out?.reasoning ?? 'No clear result yet').slice(0, 1000), evidence };
+  }
+  return { value: v, reasoning: String(out?.reasoning ?? '').slice(0, 1000), evidence };
 }
 
 export function validateResolution(out) {

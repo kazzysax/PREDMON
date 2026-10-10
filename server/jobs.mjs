@@ -96,7 +96,25 @@ export function createJobs({ cfg, db, chain, ai, log = console }) {
     // 2. price after the result time
     if (now >= Number(p.resultTime) && !p.priced) {
       const feed = cfg.priceFeeds[String(p.asset)];
-      if (!feed) return; // no price source: the pool refunds itself after 24h
+      if (!feed) {
+        // No price feed: the AI resolver looks the number up from public sources. It retries
+        // a few times (the event may not have finished); if it never gets a sourced answer the
+        // pool refunds itself after 24h.
+        if ((row.price_attempts ?? 0) >= 6) return;
+        const q = db.prepare('SELECT terms_json FROM pool_questions WHERE hash=?').get(String(p.questionHash).toLowerCase());
+        if (!q) return;
+        db.prepare('UPDATE pools SET price_attempts=price_attempts+1 WHERE id=?').run(id);
+        try {
+          const terms = JSON.parse(q.terms_json);
+          const r = await ai.resolveNumber(terms, new Date(Number(p.resultTime) * 1000).toISOString());
+          if (r.value === null) { log.warn?.(`pool ${id}: no sourced number yet (${r.reasoning.slice(0, 80)})`); return; }
+          const scaled = BigInt(Math.round(r.value * 1e8));
+          if (scaled <= 0n) return;
+          await chain.send('settler', 'pools', 'reportPrice', [id, scaled, BigInt(chain.chainNow ? await chain.chainNow() : now)], cfg.gas.price);
+          db.prepare('INSERT INTO events(kind,data,created_at) VALUES(?,?,?)').run('pool_result', JSON.stringify({ id, value: r.value, evidence: r.evidence }), now);
+        } catch (e) { log.warn?.(`pool ${id} AI result: ${e.message}`); }
+        return;
+      }
       try {
         const agg = new ethers.Contract(feed, ['function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)'], chain.provider);
         const [, answer, , updatedAt] = await agg.latestRoundData();

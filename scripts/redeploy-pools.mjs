@@ -1,0 +1,27 @@
+// Replaces only the Pools contract (new numeric design). Reputation and Calls stay.
+import fs from 'node:fs';
+import { ethers } from 'ethers';
+const art = n => JSON.parse(fs.readFileSync(new URL(`../artifacts/${n}.json`, import.meta.url), 'utf8'));
+const file = new URL('../shared/addresses.json', import.meta.url);
+const addrs = JSON.parse(fs.readFileSync(file, 'utf8'));
+const keys = Object.fromEntries([...fs.readFileSync(process.env.WALLETS_FILE, 'utf8').matchAll(/\[(\w+)\]\s+ADDRESS=(\S+)\s+PRIVATE_KEY=(\S+)/g)].map(m => [m[1], m[3]]));
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const dep = new ethers.Wallet(keys.deployer, provider), owner = new ethers.Wallet(keys.owner, provider);
+const old = new ethers.Contract(addrs.pools, art('Pools').abi, provider);
+const settler = await old.settler();
+const t = async (l, p) => { const r = await (await p).wait(); if (r.status !== 1) throw new Error(l); console.log(' ', l); };
+const before = await provider.getBalance(dep.address);
+const c = await new ethers.ContractFactory(art('Pools').abi, art('Pools').bytecode, dep).deploy(addrs.reputation, ethers.parseEther('1000'));
+await c.deploymentTransaction().wait();
+const addr = await c.getAddress(); console.log('Pools', addr);
+await t('settler', c.setSettler(settler));
+for (const [id, feed] of Object.entries(addrs.priceFeeds)) await t('asset ' + id, c.setAsset(Number(id), true, feed, Number(await old.assetMaxAge(Number(id)))));
+await t('ownership offered', c.transferOwnership(owner.address));
+const mine = c.connect(owner);
+await t('ownership accepted', mine.acceptOwnership());
+const rep = new ethers.Contract(addrs.reputation, art('Reputation').abi, owner);
+await t('reputation writer on', rep.setWriter(addr, true));
+await t('old pools writer off', rep.setWriter(addrs.pools, false));
+addrs.poolsOld = addrs.pools; addrs.pools = addr;
+fs.writeFileSync(file, JSON.stringify(addrs, null, 2) + '\n');
+console.log('owner ok:', (await c.owner()) === owner.address, 'maxEntry', ethers.formatEther(await c.maxEntry()), 'cost MON', ethers.formatEther(before - await provider.getBalance(dep.address)));

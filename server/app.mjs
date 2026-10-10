@@ -290,6 +290,24 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
   });
 
   // --- pools
+  // Step 1 of opening a pool: the AI checks that the question has one numeric answer and a public
+  // source. The cleaned question is stored by hash; the app puts that hash onchain when opening.
+  route('POST', '/api/pools/check', async ({ claims, body }) => {
+    const u = upsertUser(claims);
+    if (!u.username) throw httpError(400, 'pick a username first');
+    const question = cleanPost(body.question);
+    if (question.length < 10 || question.length > 400) throw httpError(400, 'write your question in 10-400 characters');
+    const resultTime = Math.floor(Number(body.resultTime));
+    if (!(resultTime > Date.now() / 1000)) throw httpError(400, 'pick a result time in the future');
+    let g;
+    try { g = await ai.numberGate(question, new Date(resultTime * 1000).toISOString()); } catch { throw httpError(503, 'the question checker is unavailable, try again soon'); }
+    if (!g.ok) return { ok: false, reason: g.reason };
+    const terms = { ...g.terms, resultTime };
+    const hash = termsHash(terms);
+    db.prepare('INSERT OR REPLACE INTO pool_questions(hash,creator,terms_json,created_at) VALUES(?,?,?,?)').run(hash.toLowerCase(), u.wallet, JSON.stringify(terms), Math.floor(Date.now() / 1000));
+    return { ok: true, hash, terms };
+  }, { auth: true });
+
   route('GET', '/api/pools', async ({ query }) => {
     await jobs.syncPools();
     const limit = Math.min(Number(query.get('limit') || 30), 50);
@@ -323,6 +341,8 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
       entries: Number(p.entryCount), revealed: Number(p.revealedCount), priced: p.priced,
       price: p.priced ? p.price.toString() : null, refunded: refund, voided: p.voided,
       pot: ethers.formatEther(p.entryAmount * BigInt(p.entryCount)),
+      question: (() => { const q = db.prepare('SELECT terms_json FROM pool_questions WHERE hash=?').get(String(p.questionHash).toLowerCase()); return q ? JSON.parse(q.terms_json) : null; })(),
+      creatorFee: ethers.formatEther((BigInt(p.revealedCount) * p.entryAmount * 500n) / 10000n), creatorFeePaid: p.feePaid,
       guesses: await revealedGuesses(id, p),
     };
   }

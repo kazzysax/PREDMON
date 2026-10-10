@@ -27,6 +27,14 @@ const ai = {
     if (/forbidden/.test(q)) return { ok: false, reason: 'No.' };
     return { ok: true, reason: '', highlight: /made up/.test(q) ? 'words that are not in the post' : q.split('\n').find(l => /^Will/.test(l)) ?? '', terms: { question: q, yesMeans: 'It happens', noMeans: 'It does not', source: 'Official site', category: 1 } };
   },
+  async numberGate(q) {
+    if (/yes or no/.test(q)) return { ok: false, reason: 'That is a yes/no question.' };
+    return { ok: true, reason: '', terms: { question: q, unit: 'goals', source: 'The official match report' } };
+  },
+  numberResult: null,
+  async resolveNumber() {
+    return ai.numberResult ?? { value: null, reasoning: 'not yet', evidence: [] };
+  },
   async resolve() {
     if (ai.failResolve-- > 0) throw new Error('model down');
     return { outcome: 1, reasoning: 'ok', evidence: [{ title: 't', url: 'https://x.test' }] };
@@ -290,4 +298,51 @@ test('a pool with too few guesses refunds and the server leaves it alone', async
   await jobs.tick();
   assert.equal(await ctx.pools.refundAll(id), true);
   assert.equal(db.prepare('SELECT done FROM pools WHERE id=?').get(id).done, 1);
+});
+
+test('a numeric pool with no price feed: question checked, AI posts the number, closest is paid, creator takes 5%', async () => {
+  const creator = person('npc');
+  await api('GET', '/api/me', { token: creator.token });
+  await api('POST', '/api/me/username', { token: creator.token, body: { username: 'npcreator' } });
+  const result = (await now()) + 6 * HOUR;
+  const bad = await api('POST', '/api/pools/check', { token: creator.token, body: { question: 'Is this a yes or no thing?', resultTime: result } });
+  assert.equal(bad.json.ok, false);
+  const chk = await api('POST', '/api/pools/check', { token: creator.token, body: { question: 'How many goals will Man City score on Saturday?', resultTime: result } });
+  assert.equal(chk.json.ok, true);
+  assert.equal(chk.json.terms.unit, 'goals');
+
+  // asset 7 has no feed: the AI is the source
+  await wait(ctx.pools.connect(S.owner).setAsset(7, true, ethers.ZeroAddress, 3600));
+  await wait(ctx.pools.connect(S.creator).createPool(7, result, E('50'), chk.json.hash));
+  const id = Number(await ctx.pools.poolCount());
+  await jobs.syncPools();
+  const view = (await api('GET', `/api/pools/${id}`)).json;
+  assert.equal(view.question.unit, 'goals');
+  assert.equal(view.creatorFee, '0.0');
+
+  const guesses = [0, 1, 2, 3, 5];
+  const ent = guesses.map((g, i) => ({ s: S.users[10 + i], g: BigInt(g) * 10n ** 8n, salt: salt() }));
+  for (const [i, e] of ent.entries()) {
+    await wait(ctx.pools.connect(e.s).enter(id, commitment(e.g, e.salt, e.s.address, id), { value: E('50') }));
+    const t = `ne${i}:${e.s.address}`;
+    await api('GET', '/api/me', { token: t });
+    assert.equal((await api('POST', `/api/pools/${id}/guess`, { token: t, body: { entryId: i + 1, guess: e.g.toString(), salt: e.salt } })).status, 200);
+  }
+  await warpTo(result - 3 * HOUR + 1);
+  await jobs.tick();
+  await warpTo(result + 1);
+  await jobs.tick(); // AI has no answer yet: waits
+  assert.equal((await ctx.pools.getPool(id)).priced, false);
+  ai.numberResult = { value: 2, reasoning: 'final score 2-1', evidence: [{ title: 'report', url: 'https://x.test/m' }] };
+  await jobs.tick();
+  assert.equal((await ctx.pools.getPool(id)).priced, true);
+  await jobs.tick();
+  assert.equal(Number((await ctx.pools.getPool(id)).rankedCount), 5);
+  // guess 2 is exact, so entry 3 is closest and gets the top multiplier
+  const top = await ctx.pools.claimable(id, 3);
+  // 5 players: the 95% is spread over a short ladder, so the top is above x2.9 (about x3.4)
+  assert.ok(top > E('50') * 3n && top < E('50') * 4n);
+  assert.equal((await api('GET', `/api/pools/${id}`)).json.creatorFee, '12.5');
+  await wait(ctx.pools.connect(S.creator).claimCreatorFee(id));
+  ai.numberResult = null;
 });
