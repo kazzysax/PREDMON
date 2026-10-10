@@ -18,7 +18,8 @@ export const callsAbi = parseAbi([
   'function positions(uint256, address) view returns (uint8 side, bool scored, bool claimed, uint128 stake)',
 ]);
 export const poolsAbi = parseAbi([
-  'function createPool(uint8 asset, uint64 resultTime, uint256 entryAmount) returns (uint256)',
+  'function createPool(uint8 asset, uint64 resultTime, uint256 entryAmount, bytes32 questionHash) returns (uint256)',
+  'function claimCreatorFee(uint256 id)',
   'function enter(uint256 id, bytes32 commitment) payable returns (uint256)',
   'function reveal(uint256 id, uint256 entryId, uint256 guess, bytes32 salt)',
   'function claim(uint256 id, uint256 entryId)',
@@ -46,3 +47,20 @@ export const toPrice = (s: string) => {
 export const fromPrice = (p: string | bigint) => (Number(p) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
 export const ASSETS: Record<number, string> = { 0: 'BTC', 1: 'ETH', 2: 'MON' };
+
+/** Asset id for pools whose answer is looked up by the AI resolver instead of a price feed. */
+export const OPEN_ASSET = 7;
+
+/** Prizes: MON a sponsor puts on a post for the winning side. */
+export const prizesAbi = parseAbi([
+  'function addPrize(uint256 id) payable',
+  'function register(uint256 id)',
+  'function collect(uint256 id)',
+  'function refund(uint256 id)',
+  'function shareOf(uint256 id) view returns (uint256)',
+  'function registrationEnds(uint256 id) view returns (uint256)',
+  'function prizes(uint256) view returns (uint128 total, uint32 winners)',
+  'function registered(uint256, address) view returns (bool)',
+  'function paid(uint256, address) view returns (bool)',
+  'function sponsored(uint256, address) view returns (uint128)',
+]);

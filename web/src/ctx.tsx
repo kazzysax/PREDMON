@@ -5,7 +5,7 @@ export type Me = {
   reputation: { category: number; name: string; score: number; scored: number; won: number }[];
 };
 export type Config = {
-  chainId: number; addresses: { reputation: `0x${string}`; calls: `0x${string}`; pools: `0x${string}` };
+  chainId: number; addresses: { reputation: `0x${string}`; calls: `0x${string}`; pools: `0x${string}`; prizes?: `0x${string}` };
   categories: string[]; maxStake: string; maxEntry: string; limits: { callsPerDay: number };
 };
 export type Ctx = {

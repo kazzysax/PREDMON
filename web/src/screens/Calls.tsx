@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { api } from '../api';
 import { useApp } from '../ctx';
-import { callsAbi, publicClient } from '../chain';
+import { callsAbi, prizesAbi, publicClient } from '../chain';
 import { requireStepUp, sendAndWait, walletClientFor } from '../wallet';
 import { Avatar, Icon, PostBody, Sheet, Verified, timeLeft, trimNum, when } from '../ui';
 
@@ -116,6 +116,82 @@ function Composer({ onCreated, onClose }: { onCreated: () => void; onClose: () =
         <button className="text-btn" onClick={onClose}>Cancel</button>
       </div>
     </Sheet>
+  );
+}
+
+/** A prize on a post: MON from a sponsor, split equally between everyone on the winning side. */
+function PrizeBox({ call }: { call: Call }) {
+  const { config, account, preview } = useApp();
+  const prizes = config.addresses.prizes;
+  const [total, setTotal] = useState(0n);
+  const [winners, setWinners] = useState(0);
+  const [share, setShare] = useState(0n);
+  const [endsAt, setEndsAt] = useState(0);
+  const [reg, setReg] = useState(false);
+  const [paid, setPaid] = useState(false);
+  const [mine, setMine] = useState(0n);
+  const [amount, setAmount] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [tick, setTick] = useState(0);
+  const now = Math.floor(Date.now() / 1000);
+
+  useEffect(() => {
+    if (!prizes || preview) return;
+    (async () => {
+      try {
+        const id = BigInt(call.id);
+        const rd = <T,>(functionName: string, args: any[]) => publicClient.readContract({ address: prizes, abi: prizesAbi, functionName: functionName as any, args: args as any }) as Promise<T>;
+        const [p, r, pd, sp] = await Promise.all([
+          rd<readonly [bigint, number]>('prizes', [id]), rd<boolean>('registered', [id, account.address]),
+          rd<boolean>('paid', [id, account.address]), rd<bigint>('sponsored', [id, account.address]),
+        ]);
+        setTotal(p[0]); setWinners(Number(p[1])); setReg(r); setPaid(pd); setMine(sp);
+        if (call.state === 'finalized') { setEndsAt(Number(await rd<bigint>('registrationEnds', [id]))); setShare(await rd<bigint>('shareOf', [id])); }
+      } catch { /* prizes not readable yet */ }
+    })();
+  }, [call.id, call.state, tick, prizes]);
+
+  if (!prizes || preview) return null;
+  const voting = call.state === 'open' && now < call.locksAt;
+  const iWon = call.state === 'finalized' && call.viewerSide === (call.outcome === 1 ? 'yes' : 'no');
+  const windowOpen = call.state === 'finalized' && endsAt > now;
+  const windowOver = call.state === 'finalized' && endsAt > 0 && endsAt <= now;
+  if (total === 0n && !voting && mine === 0n) return null;
+
+  const run = async (fn: 'addPrize' | 'register' | 'collect' | 'refund', value?: bigint) => {
+    setMsg(''); setBusy(true);
+    try {
+      await sendAndWait(account, { address: prizes, abi: prizesAbi, functionName: fn, args: [BigInt(call.id)], value, gas: 200_000n });
+      setAdding(false); setAmount(''); setTick(t => t + 1);
+    } catch (e: any) { setMsg(e.shortMessage ?? e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="prize">
+      {total > 0n && (
+        <div className="owed">
+          <div><b>{trimNum(formatEther(total))}<small>MON</small></b><span>prize for the winning side</span></div>
+          {windowOpen && iWon && !reg && <button className="btn sm" disabled={busy} onClick={() => run('register')}>{busy ? '…' : 'Claim a share'}</button>}
+          {windowOpen && iWon && reg && <span className="small">You're in. Shares open {when(endsAt)}.</span>}
+          {windowOver && reg && !paid && <button className="btn sm" disabled={busy} onClick={() => run('collect')}>{busy ? '…' : `Collect ${trimNum(formatEther(share))} MON`}</button>}
+          {windowOver && reg && paid && <span className="small">Collected</span>}
+        </div>
+      )}
+      {voting && !adding && <button className="btn quiet sm" onClick={() => setAdding(true)}>{total > 0n ? 'Add to the prize' : 'Add a prize for the winners'}</button>}
+      {voting && adding && (
+        <div className="entry">
+          <input className="in" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="MON to add" aria-label="Prize amount in MON" />
+          <button className="btn sm" disabled={busy || !(Number(amount) > 0)} onClick={() => run('addPrize', parseEther(amount))}>{busy ? '…' : 'Add'}</button>
+        </div>
+      )}
+      {(call.state === 'void' || (windowOver && winners === 0)) && mine > 0n && (
+        <button className="btn quiet sm" disabled={busy} onClick={() => run('refund')}>Take back your {trimNum(formatEther(mine))} MON</button>
+      )}
+      {voting && <p className="fine">The prize is split equally between everyone on the winning side. Added before voting closes. Not editable.</p>}
+      {msg && <p className="err" role="alert">{msg}</p>}
+    </div>
   );
 }
 
@@ -299,6 +375,8 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
           <button className="btn sm" disabled={busy} onClick={claim}>{busy ? 'Confirming…' : 'Collect'}</button>
         </div>
       )}
+
+      <PrizeBox call={call} />
 
       {msg && <p className="err" role="alert">{msg}</p>}
 

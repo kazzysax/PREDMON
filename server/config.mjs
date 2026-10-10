@@ -28,6 +28,7 @@ export function loadConfig(overrides = {}) {
       reputation: env.REPUTATION_ADDRESS || addresses.reputation,
       calls: env.CALLS_ADDRESS || addresses.calls,
       pools: env.POOLS_ADDRESS || addresses.pools,
+      prizes: env.PRIZES_ADDRESS || addresses.prizes,
     },
     deployBlock: Number(env.DEPLOY_BLOCK || addresses.deployBlock || 0),
     priceFeeds: env.PRICE_FEEDS ? JSON.parse(env.PRICE_FEEDS) : (addresses.priceFeeds || {}), // {"0": "0x..."}
