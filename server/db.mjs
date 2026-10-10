@@ -46,6 +46,10 @@ export function openDb(file) {
       lock_time INTEGER NOT NULL, result_time INTEGER NOT NULL, entry_amount TEXT NOT NULL,
       price_attempts INTEGER NOT NULL DEFAULT 0, scored INTEGER NOT NULL DEFAULT 0, done INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS tips (             -- MON sent person to person, verified against the chain
+      tx_hash TEXT PRIMARY KEY, from_wallet TEXT NOT NULL, to_wallet TEXT NOT NULL,
+      amount_wei TEXT NOT NULL, created_at INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS pool_questions (   -- what a numeric pool asks; the hash is stored onchain
       hash TEXT PRIMARY KEY, creator TEXT NOT NULL, terms_json TEXT NOT NULL, created_at INTEGER NOT NULL
     );

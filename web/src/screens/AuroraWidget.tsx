@@ -3,7 +3,7 @@ import { Widget, WidgetConfigProvider } from '@aurora-is-near/intents-swap-widge
 import { evm } from '@aurora-is-near/intents-swap-widget-evm';
 import { AURORA_KEY } from '../env';
 
-export default function AuroraWidget({ address }: { address: string }) {
+export default function AuroraWidget({ address, source }: { address: string; source?: { symbol: string; blockchain: string } }) {
   const injected = (window as any).ethereum;
   return (
     <WidgetConfigProvider
@@ -12,6 +12,8 @@ export default function AuroraWidget({ address }: { address: string }) {
         sendAddress: address,
         // Deposit mode needs the destination spelled out: MON on Monad, sent to the in-app wallet.
         defaultTargetToken: { symbol: 'MON', blockchain: 'monad' },
+        // What the person picked on our own screen, so the widget opens already on it.
+        ...(source ? { defaultSourceToken: source } : {}),
         // Pay from a browser wallet if there is one, or scan a QR code from any wallet.
         connectedWallets: {},
         providers: injected ? { evm: injected } : {},

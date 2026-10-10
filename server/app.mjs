@@ -289,6 +289,35 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
     return data;
   });
 
+  // --- tips: plain MON sent to a person's wallet. The app sends it; the server only records a tip
+  // once the transaction on chain really is from this user to that user.
+  route('POST', '/api/tips', async ({ claims, body }) => {
+    const u = upsertUser(claims);
+    const to = db.prepare('SELECT * FROM users WHERE username_folded=?').get(cleanFold(body.username));
+    if (!to) throw httpError(404, 'no such user');
+    if (to.id === u.id) throw httpError(400, 'you cannot tip yourself');
+    const hash = String(body.txHash ?? '').toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(hash)) throw httpError(400, 'bad transaction');
+    const seen = db.prepare('SELECT from_wallet, to_wallet FROM tips WHERE tx_hash=?').get(hash);
+    if (seen) { if (seen.from_wallet === u.wallet && seen.to_wallet === to.wallet) return { ok: true }; throw httpError(400, 'that transaction is not a tip to this person'); }
+    const tx = await chain.provider.getTransaction(hash);
+    const rc = await chain.provider.getTransactionReceipt(hash);
+    if (!tx || !rc || rc.status !== 1) throw httpError(400, 'that transaction is not confirmed yet');
+    if (lc(tx.from) !== u.wallet || lc(tx.to ?? '') !== to.wallet || tx.value <= 0n) throw httpError(400, 'that transaction is not a tip to this person');
+    db.prepare('INSERT INTO tips(tx_hash,from_wallet,to_wallet,amount_wei,created_at) VALUES(?,?,?,?,?)').run(hash, u.wallet, to.wallet, tx.value.toString(), Math.floor(Date.now() / 1000));
+    return { ok: true };
+  }, { auth: true });
+
+  route('GET', '/api/me/tips', async ({ claims }) => {
+    const u = upsertUser(claims);
+    const sum = col => db.prepare(`SELECT amount_wei FROM tips WHERE ${col}=?`).all(u.wallet).reduce((n, r) => n + BigInt(r.amount_wei), 0n);
+    const recent = db.prepare('SELECT * FROM tips WHERE from_wallet=? OR to_wallet=? ORDER BY created_at DESC LIMIT 10').all(u.wallet, u.wallet).map(t => {
+      const other = userByWallet(t.from_wallet === u.wallet ? t.to_wallet : t.from_wallet);
+      return { direction: t.from_wallet === u.wallet ? 'sent' : 'received', username: other?.username ?? null, amount: ethers.formatEther(t.amount_wei), at: t.created_at };
+    });
+    return { sent: ethers.formatEther(sum('from_wallet')), received: ethers.formatEther(sum('to_wallet')), recent };
+  }, { auth: true });
+
   // --- pools
   // Step 1 of opening a pool: the AI checks that the question has one numeric answer and a public
   // source. The cleaned question is stored by hash; the app puts that hash onchain when opening.

@@ -346,3 +346,24 @@ test('a numeric pool with no price feed: question checked, AI posts the number, 
   await wait(ctx.pools.connect(S.creator).claimCreatorFee(id));
   ai.numberResult = null;
 });
+
+test('tips: recorded only when the transaction really is from this user to that user', async () => {
+  const [a, b, c] = [person('tipa'), person('tipb'), person('tipc')];
+  for (const [p, n] of [[a, 'tipalice'], [b, 'tipbob'], [c, 'tipcara']]) {
+    await api('GET', '/api/me', { token: p.token });
+    await api('POST', '/api/me/username', { token: p.token, body: { username: n } });
+  }
+  await wait(S.owner.sendTransaction({ to: a.w.address, value: E('5') }));
+  const signer = a.w.connect(provider);
+  const tx = await wait(signer.sendTransaction({ to: b.w.address, value: E('2') }));
+  const ok = await api('POST', '/api/tips', { token: a.token, body: { username: 'tipbob', txHash: tx.hash } });
+  assert.equal(ok.status, 200);
+  assert.equal((await api('POST', '/api/tips', { token: a.token, body: { username: 'tipbob', txHash: tx.hash } })).status, 200, 'repeat is harmless');
+  assert.equal((await api('POST', '/api/tips', { token: a.token, body: { username: 'tipcara', txHash: tx.hash } })).status, 400, 'wrong recipient');
+  assert.equal((await api('POST', '/api/tips', { token: c.token, body: { username: 'tipbob', txHash: tx.hash } })).status, 400, 'not the sender');
+  assert.equal((await api('POST', '/api/tips', { token: a.token, body: { username: 'tipalice', txHash: tx.hash } })).status, 400, 'cannot tip yourself');
+  const mine = (await api('GET', '/api/me/tips', { token: b.token })).json;
+  assert.equal(mine.received, '2.0');
+  assert.equal(mine.recent[0].username, 'tipalice');
+  assert.equal((await api('GET', '/api/me/tips', { token: a.token })).json.sent, '2.0');
+});
