@@ -12,7 +12,7 @@ const art = n => JSON.parse(fs.readFileSync(new URL(`../artifacts/${n}.json`, im
 
 export async function deploy({
   signer, owner, gate, settler,
-  maxStake = ethers.parseEther('1'), maxEntry = ethers.parseEther('1'),
+  maxStake = ethers.parseEther('1'), maxEntry = ethers.parseEther('1000'),
   assets = [],            // [{ id, feed, maxAge }]  asset ids: 0 BTC, 1 ETH, 2 MON
   log = console.log,
 }) {
@@ -59,7 +59,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const feeds = process.env.PRICE_FEEDS ? JSON.parse(process.env.PRICE_FEEDS) : {}; // {"0":"0x..."}
   const out = await deploy({
     signer, owner: need('OWNER_ADDRESS'), gate: need('GATE_ADDRESS'), settler: need('SETTLER_ADDRESS'),
-    maxStake: ethers.parseEther(process.env.MAX_STAKE || '1'), maxEntry: ethers.parseEther(process.env.MAX_ENTRY || '1'),
+    maxStake: ethers.parseEther(process.env.MAX_STAKE || '1'), maxEntry: ethers.parseEther(process.env.MAX_ENTRY || '1000'),
     assets: (process.env.ASSETS || '0').split(',').map(id => ({ id: Number(id), feed: feeds[id] })),
   });
   fs.mkdirSync(new URL('../shared', import.meta.url), { recursive: true });

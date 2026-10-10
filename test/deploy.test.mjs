@@ -23,7 +23,7 @@ test('deploy wires roles, caps and ownership handover', async () => {
   assert.equal(await calls.settler(), S.settler.address);
   assert.equal(await pools.settler(), S.settler.address);
   assert.equal(await calls.maxStake(), E('1'));
-  assert.equal(await pools.maxEntry(), E('1'));
+  assert.equal(await pools.maxEntry(), E('1000'));
   assert.equal(await pools.assetEnabled(0), true);
   assert.equal(await calls.pendingOwner(), S.owner.address);
   await wait(calls.connect(S.owner).acceptOwnership());

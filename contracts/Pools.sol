@@ -5,11 +5,14 @@ import {Base} from "./Base.sol";
 import {Reputation} from "./Reputation.sol";
 import {IAggregatorV3} from "./interfaces/IAggregatorV3.sol";
 
-/// @title Pools — sealed price guesses, paid by closeness.
-/// @notice Anyone opens a pool: an asset, a result time and a fixed entry amount.
-///         Everyone pays the same amount and submits a sealed guess. After the
-///         result price arrives, the closest 30% of guesses share the pot, closer
-///         guesses getting more.
+/// @title Pools — sealed numeric guesses, paid by closeness.
+/// @notice Anyone opens a pool about a number (a price, a score, a date): a result
+///         time and one fixed entry amount between 50 and 1000 MON. Everyone pays
+///         the same amount and submits a sealed guess. After the answer arrives,
+///         the creator takes 5% of the pot and the other 95% is shared by closeness:
+///         the closest guess gets the biggest multiplier (about x2.9), the multiplier
+///         falls in a straight line to x0.3 at the halfway mark, and the whole bottom
+///         half gets x0.3. Multipliers are scaled a hair so the pot pays out exactly.
 ///
 /// Timeline of one pool
 ///   now ......... lockTime   entries open (commitment only, guess hidden)
@@ -39,6 +42,8 @@ contract Pools is Base {
         uint32 revealedCount;
         uint32 rankedCount;
         uint32 lastRankedId;
+        bool feePaid;
+        bytes32 questionHash;
         uint256 price;
         uint256 lastDistance;
     }
@@ -73,7 +78,15 @@ contract Pools is Base {
 
     uint32 public constant MAX_ENTRIES = 300;
     uint32 public constant MIN_REVEALED = 3;
-    uint256 public constant WINNER_BPS = 3_000;
+    /// The top half of the ranking gets a rising multiplier; the bottom half gets the floor.
+    uint256 public constant WINNER_BPS = 5_000;
+    /// Creator's cut of the pot.
+    uint256 public constant CREATOR_BPS = 500;
+    /// Multipliers in hundredths: x2.90 for the closest, x0.30 at the halfway mark and below.
+    uint256 internal constant TOP_W = 290;
+    uint256 internal constant FLOOR_W = 30;
+    uint256 public constant MIN_ENTRY = 50 ether;
+    uint256 public constant MAX_ENTRY = 1000 ether;
     uint256 public constant POOLS_PER_DAY = 3;
     uint256 public constant MAX_BATCH = 300;
     /// Reputation at stake per pool, x100: +K for the closest, -K for the furthest.
@@ -105,8 +118,10 @@ contract Pools is Base {
         uint8 asset,
         uint256 entryAmount,
         uint64 lockTime,
-        uint64 resultTime
+        uint64 resultTime,
+        bytes32 questionHash
     );
+    event CreatorPaid(uint256 indexed id, address indexed creator, uint256 amount);
     event Entered(uint256 indexed id, uint256 indexed entryId, address indexed entrant, bytes32 commitment);
     event Revealed(uint256 indexed id, uint256 indexed entryId, address indexed entrant, uint256 guess);
     event PriceReported(uint256 indexed id, uint256 price, uint64 priceTimestamp);
@@ -142,10 +157,13 @@ contract Pools is Base {
     error NothingToClaim();
     error BatchTooLarge();
     error NotEntrant();
+    error NotCreator();
+    error AlreadyPaid();
 
     // ---------------------------------------------------------------- setup
 
     constructor(Reputation reputation_, uint256 maxEntry_) {
+        if (maxEntry_ < MIN_ENTRY || maxEntry_ > MAX_ENTRY) revert BadEntryAmount();
         reputation = reputation_;
         maxEntry = maxEntry_;
     }
@@ -160,7 +178,7 @@ contract Pools is Base {
 
     /// @notice Raise or lower the most one entry may cost.
     function setMaxEntry(uint256 value) external onlyOwner {
-        if (value > type(uint128).max) revert BadEntryAmount();
+        if (value < MIN_ENTRY || value > MAX_ENTRY) revert BadEntryAmount();
         maxEntry = value;
         emit MaxEntrySet(value);
     }
@@ -178,13 +196,13 @@ contract Pools is Base {
     // --------------------------------------------------------------- creating
 
     /// @notice Open a pool. Anyone may; three a day each.
-    function createPool(uint8 asset, uint64 resultTime, uint256 entryAmount)
+    function createPool(uint8 asset, uint64 resultTime, uint256 entryAmount, bytes32 questionHash)
         external
         whenNotPaused
         returns (uint256 id)
     {
         if (!assetEnabled[asset]) revert BadAsset();
-        if (entryAmount == 0 || entryAmount > maxEntry) revert BadEntryAmount();
+        if (entryAmount < MIN_ENTRY || entryAmount > maxEntry) revert BadEntryAmount();
         if (
             resultTime < block.timestamp + LOCK_BEFORE + MIN_ENTRY_WINDOW
                 || resultTime > block.timestamp + MAX_HORIZON
@@ -198,11 +216,12 @@ contract Pools is Base {
         p.resultTime = resultTime;
         p.lockTime = resultTime - LOCK_BEFORE;
         p.entryAmount = uint128(entryAmount);
+        p.questionHash = questionHash;
         _emitCreated(id, p);
     }
 
     function _emitCreated(uint256 id, Pool storage p) private {
-        emit PoolCreated(id, p.creator, p.asset, p.entryAmount, p.lockTime, p.resultTime);
+        emit PoolCreated(id, p.creator, p.asset, p.entryAmount, p.lockTime, p.resultTime, p.questionHash);
     }
 
     // ---------------------------------------------------------------- entering
@@ -344,7 +363,7 @@ contract Pools is Base {
 
         int256 n = int256(uint256(p.revealedCount));
         int256 delta = (K * (n - 1 - 2 * int256(uint256(e.rank)))) / (n - 1);
-        bool won = e.rank < _winners(p.revealedCount);
+        bool won = e.rank < _winners(p.revealedCount); // top half
         reputation.record(e.entrant, CRYPTO, delta, won);
         emit EntryScored(id, entryId, e.entrant, delta, won);
         return true;
@@ -380,11 +399,41 @@ contract Pools is Base {
         if (!e.revealed) return block.timestamp >= p.resultTime ? p.entryAmount : 0;
         if (!_complete(p)) return 0;
 
-        uint256 w = _winners(p.revealedCount);
-        if (e.rank >= w) return 0;
-        uint256 pot = uint256(p.revealedCount) * p.entryAmount;
-        uint256 totalWeight = (w * (w + 1)) / 2;
-        return (pot * (w - e.rank)) / totalWeight;
+        return _payout(p, e.rank);
+    }
+
+    /// @dev Weight of a rank. The top half falls in a straight line from the top
+    ///      multiplier (x2.9) to the floor (x0.3) at its last place; the bottom half is
+    ///      flat at the floor. With an even number of players this adds up to exactly 95%
+    ///      of the pot; otherwise `_payout` scales by a hair so the pot is paid out exactly.
+    function _weight(uint256 rank, uint256 t) internal pure returns (uint256) {
+        uint256 d = t > 1 ? t - 1 : 1;
+        return rank < t ? TOP_W * d - (TOP_W - FLOOR_W) * rank : FLOOR_W * d;
+    }
+
+    function _payout(Pool storage p, uint256 rank) internal view returns (uint256) {
+        uint256 n = p.revealedCount;
+        uint256 t = _winners(uint32(n));
+        uint256 d = t > 1 ? t - 1 : 1;
+        uint256 total = TOP_W * d * t - ((TOP_W - FLOOR_W) * t * (t - 1)) / 2 + (n - t) * FLOOR_W * d;
+        uint256 players = (n * uint256(p.entryAmount)) - _creatorCut(p);
+        return (players * _weight(rank, t)) / total;
+    }
+
+    function _creatorCut(Pool storage p) internal view returns (uint256) {
+        return (uint256(p.revealedCount) * uint256(p.entryAmount) * CREATOR_BPS) / BPS;
+    }
+
+    /// @notice The pool creator collects 5% of the pot once the pool has settled.
+    function claimCreatorFee(uint256 id) external nonReentrant {
+        Pool storage p = _get(id);
+        if (msg.sender != p.creator) revert NotCreator();
+        if (_refundAll(p) || !_complete(p)) revert NotSettled();
+        if (p.feePaid) revert AlreadyPaid();
+        p.feePaid = true;
+        uint256 amount = _creatorCut(p);
+        _send(msg.sender, amount);
+        emit CreatorPaid(id, msg.sender, amount);
     }
 
     // ------------------------------------------------------------------- admin
@@ -419,7 +468,7 @@ contract Pools is Base {
         return p.priced && p.rankedCount == p.revealedCount;
     }
 
-    /// Closest 30% of revealed guesses, at least one.
+    /// Top half of revealed guesses, at least one.
     function _winners(uint32 revealed) internal pure returns (uint256) {
         uint256 w = (uint256(revealed) * WINNER_BPS) / BPS;
         return w == 0 ? 1 : w;

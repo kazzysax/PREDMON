@@ -245,10 +245,10 @@ test('a pool: sealed guesses, automatic reveal, price, ranking, scoring, then en
   const guesses = [100, 120, 140, 160, 180];
   const entrants = guesses.map((g, i) => ({ s: S.users[i], g: P8(g), salt: salt() }));
   const result = (await now()) + 6 * HOUR;
-  await wait(ctx.pools.connect(S.creator).createPool(0, result, E('1')));
+  await wait(ctx.pools.connect(S.creator).createPool(0, result, E('50'), ethers.id('q')));
   const id = Number(await ctx.pools.poolCount());
   for (const [i, e] of entrants.entries()) {
-    await wait(ctx.pools.connect(e.s).enter(id, commitment(e.g, e.salt, e.s.address, id), { value: E('1') }));
+    await wait(ctx.pools.connect(e.s).enter(id, commitment(e.g, e.salt, e.s.address, id), { value: E('50') }));
     const p = { token: `pe${i}:${e.s.address}` };
     await api('GET', '/api/me', { token: p.token });
     const bad = await api('POST', `/api/pools/${id}/guess`, { token: p.token, body: { entryId: i + 1, guess: (e.g + 1n).toString(), salt: e.salt } });
@@ -272,19 +272,19 @@ test('a pool: sealed guesses, automatic reveal, price, ranking, scoring, then en
   const p = await ctx.pools.getPool(id);
   assert.equal(Number(p.rankedCount), 5);
   assert.equal(await ctx.rep.callsScored(entrants[2].s.address, 0), 1n);
-  // closest to 150 is 140 (entry 3) and the winner count is 1 of 5
-  assert.equal(await ctx.pools.claimable(id, 3), E('5'));
+  // closest to 150 is 140 (entry 3): top of the falling multipliers, above its 50 entry
+  assert.ok((await ctx.pools.claimable(id, 3)) > E('100'));
   await wait(ctx.pools.connect(entrants[2].s).claim(id, 3));
   assert.equal((await api('GET', '/api/leaderboard?category=0')).status, 200);
 });
 
 test('a pool with too few guesses refunds and the server leaves it alone', async () => {
   const result = (await now()) + 6 * HOUR;
-  await wait(ctx.pools.connect(S.creator).createPool(0, result, E('1')));
+  await wait(ctx.pools.connect(S.creator).createPool(0, result, E('50'), ethers.id('q')));
   const id = Number(await ctx.pools.poolCount());
   for (let i = 0; i < 2; i++) {
     const s = salt();
-    await wait(ctx.pools.connect(S.users[i]).enter(id, commitment(P8(1), s, S.users[i].address, id), { value: E('1') }));
+    await wait(ctx.pools.connect(S.users[i]).enter(id, commitment(P8(1), s, S.users[i].address, id), { value: E('50') }));
   }
   await warpTo(result + 1);
   await jobs.tick();
