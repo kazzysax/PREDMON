@@ -9,7 +9,7 @@ import { Avatar, Icon, PostBody, Sheet, Verified, timeLeft, trimNum, when } from
 type Terms = { post?: string; highlight?: string; question: string; yesMeans: string; noMeans: string; source: string };
 type Call = {
   id: number; terms: Terms; category: number; categoryName: string;
-  creator: { username: string; xVerified: boolean } | null;
+  creator: { username: string; xVerified: boolean; avatar?: string | null } | null;
   opensAt: number; locksAt: number; closesAt: number; state: 'open' | 'proposed' | 'finalized' | 'void';
   outcome: number; voteCount: number; viewerVoted: boolean; viewerSide?: 'yes' | 'no' | null;
   yesWeight?: number; noWeight?: number; yesPool?: string; noPool?: string; claimable?: string;
@@ -382,7 +382,7 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
 
       </div>
       <footer className="under">
-        <Avatar name={call.creator?.username} />
+        <Avatar name={call.creator?.username} src={call.creator?.avatar} />
         <div className="txt">
           <b><span>@{call.creator?.username}</span>{call.creator?.xVerified && <Verified />}</b>
           <span>{revealed && pool > 0 ? `${trimNum(pool, 0)} MON staked` : call.terms.source}</span>
@@ -393,7 +393,7 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
 
       {sheet === 'terms' && (
         <Sheet onClose={() => setSheet('')}>
-          <div className="by"><Avatar name={call.creator?.username} size="sm" /><div className="meta">@{call.creator?.username} in {call.categoryName}</div></div>
+          <div className="by"><Avatar name={call.creator?.username} src={call.creator?.avatar} size="sm" /><div className="meta">@{call.creator?.username} in {call.categoryName}</div></div>
           <PostBody post={call.terms.post} highlight={call.terms.highlight} question={call.terms.question} lg />
           <h2 className="h2" style={{ fontSize: 24 }}>How this settles</h2>
           <TermsBox terms={call.terms} call={call} />
@@ -412,7 +412,7 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
           <h2 className="h2">Who's in</h2>
           <p className="lede">Only people who took a side can read and post here.</p>
           {comments?.map(c => (
-            <div key={c.id} className="say"><Avatar name={c.username} size="sm" /><p><b>@{c.username}{c.xVerified && <Verified />}</b>{c.body}</p></div>
+            <div key={c.id} className="say"><Avatar name={c.username} src={c.avatar} size="sm" /><p><b>@{c.username}{c.xVerified && <Verified />}</b>{c.body}</p></div>
           ))}
           {comments && comments.length === 0 && <p className="small">Nobody yet. You could be the first.</p>}
           <form className="sayrow" onSubmit={e => { e.preventDefault(); if (text.trim()) postComment(); }}>

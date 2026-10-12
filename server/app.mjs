@@ -12,8 +12,8 @@ const STATES = ['open', 'proposed', 'finalized', 'void'];
 
 export function createApp({ cfg, db, chain, ai, verify, jobs }) {
   const routes = [];
-  const route = (method, path, handler, { auth = false, optionalAuth = false } = {}) =>
-    routes.push({ method, re: new RegExp(`^${path.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`), handler, auth, optionalAuth });
+  const route = (method, path, handler, { auth = false, optionalAuth = false, maxBody = 20_000 } = {}) =>
+    routes.push({ method, re: new RegExp(`^${path.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`), handler, auth, optionalAuth, maxBody });
 
   // ------------------------------------------------------------ helpers
   const lc = a => a.toLowerCase();
@@ -54,7 +54,7 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
     return out;
   }
 
-  const publicUser = u => u && ({ username: u.username, wallet: u.wallet, xVerified: !!u.x_username, xUsername: u.x_username });
+  const publicUser = u => u && ({ username: u.username, wallet: u.wallet, xVerified: !!u.x_username, xUsername: u.x_username, avatar: u.avatar_at && u.username_folded ? `/api/avatars/${u.username_folded}?v=${u.avatar_at}` : null });
   const userByWallet = w => db.prepare('SELECT * FROM users WHERE wallet=?').get(lc(w));
   const hasVoted = async (id, wallet) => Number((await chain.read.calls.positions(id, wallet)).side) !== 0;
 
@@ -106,6 +106,30 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
     db.prepare('UPDATE users SET username=?, username_folded=? WHERE id=?').run(c.name, c.folded, u.id);
     return { username: c.name };
   }, { auth: true });
+
+  // A profile picture: the browser shrinks it to a small JPEG first; the server checks it really is one and stores it.
+  route('POST', '/api/me/avatar', async ({ claims, body }) => {
+    const u = upsertUser(claims);
+    const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(body.image ?? ''));
+    if (!m) throw httpError(400, 'choose a photo (JPEG, PNG or WebP)');
+    const buf = Buffer.from(m[1], 'base64');
+    if (buf.length < 200 || buf.length > 90_000) throw httpError(400, 'that photo is too large');
+    if (!(buf[0] === 0xff && buf[1] === 0xd8 && buf[buf.length - 2] === 0xff && buf[buf.length - 1] === 0xd9)) throw httpError(400, 'that file is not a valid photo');
+    if (!u.username_folded) throw httpError(400, 'pick a username first');
+    const at = nowMs();
+    db.prepare('UPDATE users SET avatar=?, avatar_at=? WHERE id=?').run(buf, at, u.id);
+    return { avatar: `/api/avatars/${u.username_folded}?v=${at}` };
+  }, { auth: true, maxBody: 140_000 });
+  route('POST', '/api/me/avatar/remove', async ({ claims }) => {
+    const u = upsertUser(claims);
+    db.prepare('UPDATE users SET avatar=NULL, avatar_at=NULL WHERE id=?').run(u.id);
+    return { avatar: null };
+  }, { auth: true });
+  route('GET', '/api/avatars/:name', async ({ params }) => {
+    const r = db.prepare('SELECT avatar FROM users WHERE username_folded=? AND avatar IS NOT NULL').get(cleanFold(params.name));
+    if (!r) throw httpError(404, 'no photo');
+    return { raw: true, type: 'image/jpeg', body: Buffer.from(r.avatar) };
+  });
 
   // --- calls: draft then confirm
   route('POST', '/api/calls/draft', async ({ claims, body }) => {
@@ -211,8 +235,8 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
     const row = db.prepare('SELECT * FROM markets WHERE id=?').get(id);
     if (!row) throw httpError(404, 'no such call');
     if (row.creator_id !== u.id && !(await hasVoted(id, u.wallet))) throw httpError(403, 'vote first to read and join the discussion');
-    const rows = db.prepare('SELECT c.id,c.body,c.created_at,u.username,u.x_username FROM comments c JOIN users u ON u.id=c.user_id WHERE market_id=? ORDER BY c.id').all(id);
-    return { comments: rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, xVerified: !!r.x_username })) };
+    const rows = db.prepare('SELECT c.id,c.body,c.created_at,u.username,u.username_folded,u.avatar_at,u.x_username FROM comments c JOIN users u ON u.id=c.user_id WHERE market_id=? ORDER BY c.id').all(id);
+    return { comments: rows.map(r => ({ id: r.id, body: r.body, createdAt: r.created_at, username: r.username, xVerified: !!r.x_username, avatar: r.avatar_at && r.username_folded ? `/api/avatars/${r.username_folded}?v=${r.avatar_at}` : null })) };
   }, { auth: true });
 
   route('POST', '/api/calls/:id/comments', async ({ claims, params, body }) => {
@@ -413,7 +437,7 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
       let body = {};
       if (req.method === 'POST') {
         const chunks = []; let size = 0;
-        for await (const c of req) { size += c.length; if (size > 20_000) throw httpError(413, 'too large'); chunks.push(c); }
+        for await (const c of req) { size += c.length; if (size > (r.maxBody ?? 20_000)) throw httpError(413, 'too large'); chunks.push(c); }
         try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch { throw httpError(400, 'bad JSON'); }
       }
       const out = await r.handler({ req, claims, params, query: url.searchParams, body });

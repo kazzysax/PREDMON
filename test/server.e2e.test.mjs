@@ -367,3 +367,28 @@ test('tips: recorded only when the transaction really is from this user to that 
   assert.equal(mine.recent[0].username, 'tipalice');
   assert.equal((await api('GET', '/api/me/tips', { token: a.token })).json.sent, '2.0');
 });
+
+test('profile photos: only a real small JPEG is kept, it is served publicly, and it can be removed', async () => {
+  const a = person('pica'); const other = person('picb');
+  await api('GET', '/api/me', { token: a.token });
+  await api('POST', '/api/me/username', { token: a.token, body: { username: 'picalice' } });
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(400, 7), Buffer.from([0xff, 0xd9])]);
+  const url = 'data:image/jpeg;base64,' + jpeg.toString('base64');
+  // not signed in
+  assert.equal((await api('POST', '/api/me/avatar', { body: { image: url } })).status, 401);
+  // wrong type, bad bytes, too big
+  assert.equal((await api('POST', '/api/me/avatar', { token: a.token, body: { image: 'data:image/png;base64,AAAA' } })).status, 400);
+  assert.equal((await api('POST', '/api/me/avatar', { token: a.token, body: { image: 'data:image/jpeg;base64,' + Buffer.alloc(400, 1).toString('base64') } })).status, 400);
+  assert.equal((await api('POST', '/api/me/avatar', { token: a.token, body: { image: 'data:image/jpeg;base64,' + Buffer.concat([Buffer.from([0xff, 0xd8]), Buffer.alloc(95_000), Buffer.from([0xff, 0xd9])]).toString('base64') } })).status, 400);
+  // a good one
+  const ok = await api('POST', '/api/me/avatar', { token: a.token, body: { image: url } });
+  assert.equal(ok.status, 200); assert.match(ok.json.avatar, /^\/api\/avatars\/[a-z0-9]+\?v=\d+$/);
+  const me = await api('GET', '/api/me', { token: a.token }); assert.equal(me.json.avatar, ok.json.avatar);
+  assert.equal((await api('GET', '/api/users/picalice', { token: other.token })).json.avatar, ok.json.avatar);
+  const img = await fetch(base + '/api/avatars/plcallce'); assert.equal(img.status, 200); assert.equal(img.headers.get('content-type'), 'image/jpeg');
+  assert.equal(Buffer.from(await img.arrayBuffer()).equals(jpeg), true);
+  // removed
+  await api('POST', '/api/me/avatar/remove', { token: a.token, body: {} });
+  assert.equal((await fetch(base + '/api/avatars/plcallce')).status, 404);
+  assert.equal((await api('GET', '/api/me', { token: a.token })).json.avatar, null);
+});

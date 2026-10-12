@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 
 export type Me = {
-  id: string; username: string | null; wallet: string; xVerified: boolean; xUsername: string | null;
+  id: string; username: string | null; wallet: string; xVerified: boolean; xUsername: string | null; avatar?: string | null;
   reputation: { category: number; name: string; score: number; scored: number; won: number }[];
 };
 export type Config = {

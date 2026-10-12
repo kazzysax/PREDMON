@@ -1,5 +1,6 @@
 // Small shared pieces: icons, avatar, the post with its highlighted prediction, time helpers.
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { API_URL } from './env';
 
 const paths: Record<string, ReactNode> = {
   calls: <><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12.5h5" /></>,
@@ -27,9 +28,10 @@ export function Icon({ name }: { name: keyof typeof paths | string }) {
 }
 
 const hue = (s: string) => [...s].reduce((a, c) => a + c.charCodeAt(0), 0) % 5;
-export function Avatar({ name, size }: { name?: string | null; size?: 'sm' | 'ring' }) {
+export function Avatar({ name, size, src }: { name?: string | null; size?: 'sm' | 'ring'; src?: string | null }) {
   const n = name || '?';
-  const el = <span className={`av h${hue(n)} ${size ?? ''}`} aria-hidden="true">{n[0]}</span>;
+  const [bad, setBad] = useState(false);
+  const el = <span className={`av h${hue(n)} ${size ?? ''}`} aria-hidden="true">{src && !bad ? <img src={src.startsWith('/') ? API_URL + src : src} alt="" onError={() => setBad(true)} /> : n[0]}</span>;
   return size === 'ring' ? <span className="ringwrap">{el}</span> : el;
 }
 export const Verified = () => <span className="tick" title="Linked X account">✓</span>;

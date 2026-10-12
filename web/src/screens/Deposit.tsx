@@ -4,11 +4,10 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { api } from '../api';
 import { useApp } from '../ctx';
-import { AURORA_KEY } from '../env';
 import { sendAndWait } from '../wallet';
 import { Avatar, Icon, Sheet, trimNum } from '../ui';
 
-const AuroraWidget = lazy(() => import('./AuroraWidget'));
+const TopUp = lazy(() => import('./TopUp'));
 
 type Tips = { sent: string; received: string; recent: { direction: 'sent' | 'received'; username: string | null; amount: string; at: number }[] };
 
@@ -20,7 +19,7 @@ const SOURCES: { id: string; label: string; chain: string; tokens: string[] }[] 
   { id: 'arb', label: 'Arbitrum', chain: 'arb', tokens: ['USDC', 'ETH'] },
   { id: 'op', label: 'Optimism', chain: 'op', tokens: ['USDC', 'ETH'] },
   { id: 'sol', label: 'Solana', chain: 'sol', tokens: ['SOL', 'USDC'] },
-  { id: 'near', label: 'NEAR', chain: 'near', tokens: ['NEAR', 'USDC'] },
+  { id: 'near', label: 'NEAR', chain: 'near', tokens: ['USDC'] },
 ];
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -92,9 +91,8 @@ function AddMon({ onClose }: { onClose: () => void }) {
   const { account, preview } = useApp();
   const [src, setSrc] = useState(SOURCES[1]);
   const [token, setToken] = useState(SOURCES[1].tokens[0]);
-  const [go, setGo] = useState(false);
 
-  const pick = (s: typeof SOURCES[number]) => { setSrc(s); setToken(s.tokens[0]); setGo(false); };
+  const pick = (s: typeof SOURCES[number]) => { setSrc(s); setToken(s.tokens[0]); };
 
   return (
     <Sheet onClose={onClose}>
@@ -110,24 +108,16 @@ function AddMon({ onClose }: { onClose: () => void }) {
       <div>
         <span className="label">Pay with</span>
         <div className="amounts wrap">
-          {src.tokens.map(t => <button key={t} className={token === t ? 'on' : ''} onClick={() => { setToken(t); setGo(false); }}>{t}</button>)}
+          {src.tokens.map(t => <button key={t} className={token === t ? 'on' : ''} onClick={() => { setToken(t); }}>{t}</button>)}
         </div>
       </div>
 
       {src.id === 'monad' && token === 'MON' ? (
         <p className="info">Already on Monad? Send MON straight to <b>{short(account.address)}</b>. Copy it from the wallet page.</p>
-      ) : preview ? (
-        <div className="frame"><p className="empty"><b>{token} on {src.label} → MON</b>Aurora's form loads here in the live app.</p></div>
-      ) : !AURORA_KEY ? (
-        <p className="info">Top-ups from other chains aren't switched on yet.</p>
-      ) : !go ? (
-        <button className="btn" onClick={() => setGo(true)}>Continue with {token} on {src.label}</button>
       ) : (
-        <div className="frame">
-          <Suspense fallback={<p className="empty">Loading…</p>}>
-            <AuroraWidget key={`${src.id}-${token}`} address={account.address} source={{ symbol: token, blockchain: src.chain }} />
-          </Suspense>
-        </div>
+        <Suspense fallback={<p className="empty">Loading…</p>}>
+          <TopUp key={`${src.id}-${token}`} address={account.address} chain={src.chain} symbol={token} chainLabel={src.label} injectedRefund={undefined} />
+        </Suspense>
       )}
       <button className="text-btn" onClick={onClose}>Close</button>
     </Sheet>

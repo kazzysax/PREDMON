@@ -8,7 +8,7 @@ import { Avatar, Curve, Icon, Sheet, timeLeft, trimNum, when } from '../ui';
 
 type Question = { question: string; unit: string; source: string; resultTime: number };
 type Pool = {
-  id: number; creator: { username?: string; wallet?: string }; asset: number; entryAmount: string;
+  id: number; creator: { username?: string; wallet?: string; avatar?: string | null }; asset: number; entryAmount: string;
   lockTime: number; resultTime: number; entries: number; revealed: number; priced: boolean;
   price: string | null; refunded: boolean; voided: boolean; pot: string; guesses?: string[];
   question?: Question | null; creatorFee?: string; creatorFeePaid?: boolean;
@@ -336,7 +336,7 @@ function PoolCard({ pool, mine, addMine, reload }: { pool: Pool; mine: Mine[]; a
       {msg && <p className="err" role="alert">{msg}</p>}
       </div>
       <footer className="under">
-        <Avatar name={pool.creator.username ?? '?'} />
+        <Avatar name={pool.creator.username ?? '?'} src={pool.creator.avatar} />
         <div className="txt">
           <b>@{pool.creator.username ?? pool.creator.wallet?.slice(0, 8)}</b>
           <span>{isOpen(pool) ? 'Settled by the AI resolver, with sources' : 'Settles from the Chainlink price feed'}</span>

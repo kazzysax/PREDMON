@@ -62,6 +62,7 @@ export function openDb(file) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL
     );
   `);
+  for (const col of ['avatar BLOB', 'avatar_at INTEGER']) { try { db.exec(`ALTER TABLE users ADD COLUMN ${col}`); } catch { /* already there */ } }
   const kvGet = (k, d = null) => { const r = db.prepare('SELECT v FROM kv WHERE k=?').get(k); return r ? JSON.parse(r.v) : d; };
   const kvSet = (k, v) => db.prepare('INSERT INTO kv(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v').run(k, JSON.stringify(v));
   return Object.assign(db, { kvGet, kvSet });

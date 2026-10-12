@@ -5,6 +5,7 @@ import { useApp } from '../ctx';
 import { callsAbi, publicClient } from '../chain';
 import { sendAndWait } from '../wallet';
 import { Avatar, Icon, Verified, trimNum } from '../ui';
+import { squarePhoto } from '../photo';
 
 export function Profile() {
   const { me, config, account, hasX, linkX, signOut, preview } = useApp();
@@ -21,16 +22,36 @@ export function Profile() {
   const totalWon = me.reputation.reduce((a, r) => a + r.won, 0);
   const max = Math.max(10, ...me.reputation.map(r => Math.abs(r.score)));
 
+  const [photo, setPhoto] = useState<string | null | undefined>(undefined);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState('');
+  const changePhoto = async (f: File) => {
+    setPhotoMsg(''); setPhotoBusy(true);
+    try {
+      const image = await squarePhoto(f);
+      if (preview) { setPhoto(image); return; }
+      const r = await api<{ avatar: string }>('/api/me/avatar', { body: { image } });
+      setPhoto(r.avatar);
+    } catch (e: any) { setPhotoMsg(e.message); } finally { setPhotoBusy(false); }
+  };
+  const removePhoto = async () => { setPhotoMsg(''); try { if (!preview) await api('/api/me/avatar/remove', { body: {} }); setPhoto(null); } catch (e: any) { setPhotoMsg(e.message); } };
+
   const rate = totalScored ? Math.round((totalWon / totalScored) * 100) : 0;
   const best = [...me.reputation].sort((x, y) => y.score - x.score)[0];
 
   return (
     <div className="page">
       <div className="under" style={{ padding: '6px 0' }}>
-        <Avatar name={me.username} size="ring" />
+        <label className="avpick" title="Change photo">
+          <Avatar name={me.username} src={photo === undefined ? me.avatar : photo} size="ring" />
+          <span className="avcam" aria-hidden="true">{photoBusy ? '…' : '+'}</span>
+          <input type="file" accept="image/*" hidden disabled={photoBusy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) changePhoto(f); }} />
+        </label>
         <div className="txt">
           <h1 className="h2">@{me.username}{me.xVerified && <Verified />}</h1>
           <span className="small">{account.address.slice(0, 8)}…{account.address.slice(-6)}</span>
+          {(photo === undefined ? me.avatar : photo) && <button className="text-btn" style={{ padding: 0, textAlign: 'left' }} onClick={removePhoto}>Remove photo</button>}
+          {photoMsg && <span className="err" role="alert">{photoMsg}</span>}
         </div>
       </div>
 
@@ -104,7 +125,7 @@ function FindUser() {
       {msg && <p className="err" role="alert">{msg === 'no such user' ? "Couldn't load that profile." : msg}</p>}
       {u && (
         <div className="list"><div className="item">
-          <Avatar name={u.username} />
+          <Avatar name={u.username} src={u.avatar} />
           <div className="grow">
             <div className="name">@{u.username}{u.xVerified && <Verified />}</div>
             <div className="sub">{trimNum(u.followers, 0)} followers{u.reputation.filter((r: any) => r.scored > 0).slice(0, 2).map((r: any) => ` · ${r.name} ${r.score.toFixed(1)}`)}</div>

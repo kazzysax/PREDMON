@@ -28,7 +28,7 @@ export function Leaderboard() {
             <span className="cap">Leading {config.categories[cat]}</span>
             <div className="num" style={{ fontSize: 72 }}>{first.score.toFixed(1)}</div>
             <div className="under" style={{ padding: '8px 0 0' }}>
-              <Avatar name={first.username} />
+              <Avatar name={first.username} src={first.avatar} />
               <div className="txt"><b><span>@{first.username}</span>{first.xVerified && <Verified />}</b><span>{first.won} wins · {first.scored} played</span></div>
             </div>
           </div>
@@ -38,7 +38,7 @@ export function Leaderboard() {
             {rows.slice(1).map((r, i) => (
               <div key={r.username} className="item">
                 <span className="pos">{i + 2}</span>
-                <Avatar name={r.username} size="sm" />
+                <Avatar name={r.username} src={r.avatar} size="sm" />
                 <div className="grow">
                   <div className="name">@{r.username}{r.xVerified && <Verified />}{r.username === me.username ? <span className="sub"> · you</span> : null}</div>
                   <div className="sub">{r.won} wins · {r.scored} played</div>
