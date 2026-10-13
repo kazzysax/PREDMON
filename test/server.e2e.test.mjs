@@ -333,6 +333,7 @@ test('a numeric pool with no price feed: question checked, AI posts the number, 
   await warpTo(result + 1);
   await jobs.tick(); // AI has no answer yet: waits
   assert.equal((await ctx.pools.getPool(id)).priced, false);
+  await warpTo(result + 130); // the checker looks again every 2 minutes
   ai.numberResult = { value: 2, reasoning: 'final score 2-1', evidence: [{ title: 'report', url: 'https://x.test/m' }] };
   await jobs.tick();
   assert.equal((await ctx.pools.getPool(id)).priced, true);
