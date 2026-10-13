@@ -28,10 +28,19 @@ function Inner() {
   useEffect(() => { api<Config>('/api/config').then(setConfig).catch(e => setError(e.message)); }, []);
 
   // Once signed in: make sure there is a wallet, then load the profile.
+  // Wait until the wallet list has really loaded; only create one if the person truly has none.
+  const [slow, setSlow] = useState(false);
+  const loaded = !accounts.isLoading && !accounts.isFetching;
   useEffect(() => {
     if (!user.data) { setMe(null); return; }
+    if (!loaded || account) return;
     ensureWallet().catch((e: any) => setError(`Could not create your wallet: ${e.message}`));
-  }, [user.data?.id]);
+  }, [user.data?.id, loaded, account?.address]);
+  useEffect(() => {
+    setSlow(false);
+    const t = setTimeout(() => setSlow(true), 12_000);
+    return () => clearTimeout(t);
+  }, [user.data?.id, account?.address]);
 
   const reloadMe = async () => {
     if (!account) return;
@@ -48,7 +57,16 @@ function Inner() {
 
   if (!user.data) return <SignIn />;
   if (!config || !account || !me) {
-    return <div className="app"><p className="empty">{error || "Setting up your wallet…"}</p></div>;
+    return (
+      <div className="app">
+        <p className="empty">{error || 'Setting up your wallet…'}</p>
+        {(slow || error) && (
+          <p className="empty">
+            <button className="btn sm" onClick={() => { setError(''); reloadMe(); window.location.reload(); }}>Try again</button>
+          </p>
+        )}
+      </div>
+    );
   }
   if (!me.username) return <Username onDone={reloadMe} />;
 
