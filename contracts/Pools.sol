@@ -85,7 +85,7 @@ contract Pools is Base {
     /// Multipliers in hundredths: x2.90 for the closest, x0.30 at the halfway mark and below.
     uint256 internal constant TOP_W = 290;
     uint256 internal constant FLOOR_W = 30;
-    uint256 public constant MIN_ENTRY = 50 ether;
+    uint256 public constant MIN_ENTRY = 10 ether;
     uint256 public constant MAX_ENTRY = 1000 ether;
     uint256 public constant POOLS_PER_DAY = 3;
     uint256 public constant MAX_BATCH = 300;

@@ -72,7 +72,7 @@ function NewPool({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
   const [kind, setKind] = useState<'open' | number>('open');
   const [question, setQuestion] = useState('');
   const [at, setAt] = useState('');
-  const [entry, setEntry] = useState('50');
+  const [entry, setEntry] = useState('10');
   const [checked, setChecked] = useState<{ hash: `0x${string}`; terms: Question } | null>(null);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -85,7 +85,7 @@ function NewPool({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
   };
   const amount = () => {
     const n = Number(entry);
-    if (!(n >= 50 && n <= 1000)) throw new Error('The entry has to be between 50 and 1000 MON.');
+    if (!(n >= 10 && n <= 1000)) throw new Error('The entry has to be between 10 and 1000 MON.');
     if (n > Number(config.maxEntry)) throw new Error(`Entry can be at most ${trimNum(config.maxEntry)} MON right now.`);
     return parseEther(entry);
   };
@@ -153,8 +153,8 @@ function NewPool({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
       <label><span className="label">The answer is read</span>
         <input className="in" type="datetime-local" value={at} onChange={e => setAt(e.target.value)} />
       </label>
-      <label><span className="label">Everyone pays, between 50 and 1000 MON</span>
-        <input className="in" inputMode="decimal" value={entry} onChange={e => setEntry(e.target.value)} placeholder="50" />
+      <label><span className="label">Everyone pays, between 10 and 1000 MON</span>
+        <input className="in" inputMode="decimal" value={entry} onChange={e => setEntry(e.target.value)} placeholder="10" />
       </label>
       {msg && <p className="err" role="alert">{msg}</p>}
       <p className="fine">Entries close 3 hours before the answer is read. Three pools a day.</p>

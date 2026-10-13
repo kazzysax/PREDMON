@@ -63,7 +63,7 @@ test('creation: asset enabled, entry within the cap, windows, three a day', asyn
   const t = await now();
   const ok = t + 6 * HOUR;
   await reverts(pools.connect(S.creator).createPool(1, ok, E('50'), ethers.id('q')), 'BadAsset');
-  await reverts(pools.connect(S.creator).createPool(0, ok, E('49.9'), ethers.id('q')), 'BadEntryAmount');
+  await reverts(pools.connect(S.creator).createPool(0, ok, E('9.9'), ethers.id('q')), 'BadEntryAmount');
   await reverts(pools.connect(S.creator).createPool(0, ok, E('60.1'), ethers.id('q')), 'BadEntryAmount');
   await reverts(pools.connect(S.creator).createPool(0, t + 3 * HOUR, E('50'), ethers.id('q')), 'BadWindow');
   await reverts(pools.connect(S.creator).createPool(0, t + 8 * DAY, E('50'), ethers.id('q')), 'BadWindow');
