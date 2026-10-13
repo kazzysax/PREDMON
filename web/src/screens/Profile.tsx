@@ -6,6 +6,7 @@ import { callsAbi, publicClient } from '../chain';
 import { sendAndWait } from '../wallet';
 import { Avatar, Icon, Verified, trimNum } from '../ui';
 import { squarePhoto } from '../photo';
+import { ExportWallet } from './ExportWallet';
 
 export function Profile() {
   const { me, config, account, hasX, linkX, signOut, preview } = useApp();
@@ -25,6 +26,7 @@ export function Profile() {
   const [photo, setPhoto] = useState<string | null | undefined>(undefined);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoMsg, setPhotoMsg] = useState('');
+  const [exporting, setExporting] = useState(false);
   const changePhoto = async (f: File) => {
     setPhotoMsg(''); setPhotoBusy(true);
     try {
@@ -101,6 +103,14 @@ export function Profile() {
 
       <FindUser />
       {msg && <p className="err" role="alert">{msg}</p>}
+      {!preview && (
+        <div className="group">
+          <button className="grow" style={{ width: '100%', textAlign: 'left' }} onClick={() => setExporting(true)}>
+            <span className="gm"><b>Export wallet</b><span>Move funds out, or use this wallet in MetaMask</span></span>
+          </button>
+        </div>
+      )}
+      {exporting && <ExportWallet account={account} onClose={() => setExporting(false)} />}
       <button className="text-btn" onClick={signOut}>Sign out</button>
     </div>
   );
