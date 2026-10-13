@@ -18,6 +18,12 @@ type Call = {
 
 const LIVES = [{ label: '1 hour', sec: 3600 }, { label: '6 hours', sec: 6 * 3600 }, { label: '1 day', sec: 86400 }, { label: '3 days', sec: 3 * 86400 }, { label: '7 days', sec: 7 * 86400 }];
 const STAKES = ['Free', '5', '25', '100'];
+/** Only offer amounts the contract will accept; the cap is set on chain and can change. */
+const stakeChoices = (cap: number) => {
+  const ok = ['1', '5', '25', '100'].filter(v => Number(v) <= cap);
+  if (cap < 1) return ['Free', String(Math.max(cap, 0.01))];
+  return ['Free', ...(ok.length ? ok : ['1'])];
+};
 
 export function Calls({ composing, setComposing }: { composing: boolean; setComposing: (v: boolean) => void }) {
   const { config } = useApp();
@@ -334,7 +340,7 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
   const mySide = call.viewerSide === 'no' ? 'NO' : 'YES';
   const amounts = (
     <div className="amounts" role="group" aria-label="How much to put on it">
-      {(adding ? STAKES.slice(1) : STAKES).map(s => (
+      {(adding ? stakeChoices(Number(config.maxStake)).slice(1) : stakeChoices(Number(config.maxStake))).map(s => (
         <button key={s} className={pick === s ? 'on' : ''} onClick={() => setPick(s)}>{s === 'Free' ? 'Free' : `${s} MON`}</button>
       ))}
     </div>
