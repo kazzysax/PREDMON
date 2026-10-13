@@ -43,8 +43,10 @@ Rules:
 
 const NUMBER_SYSTEM = `A person wants to open a pool where everyone guesses ONE NUMBER and the closest guess wins. Check their question and tidy it.
 Reply with ONE JSON object and nothing else:
-{"ok": boolean, "reason": string, "question": string, "unit": string, "source": string}
+{"ok": boolean, "reason": string, "title": string, "measure": string, "question": string, "unit": string, "source": string}
 Rules:
+- "title" is the main subject, short and plain, like a headline: "Arsenal vs Lille", "Bitcoin price", "Lagos temperature". Under 45 characters. Name the subject only, not the question.
+- "measure" says exactly what number is asked, in a few words: "Goals scored by Arsenal", "Total goals in the match", "Closing price in USD". A score is not one number, so for scores ask for one number such as goals by one team or total goals. Under 60 characters.
 - The answer must be a single number that a public, checkable source will show at a known time (a price, a score, a count, a temperature, a date expressed as a number of days). Opinions and yes/no questions are not allowed: set ok=false with a short reason.
 - "question" is a clear restatement that names exactly what is measured and exactly when (include the timezone).
 - "unit" is a short label for the number, such as "USD", "goals", "points", "degrees C", "days". Under 20 characters.
@@ -153,9 +155,9 @@ export function validateGate(out) {
 
 export function validateNumberGate(out) {
   if (!out || out.ok !== true) return { ok: false, reason: String(out?.reason ?? 'That cannot be settled as a single number.').slice(0, 300) };
-  const f = { question: 5, unit: 1, source: 3 };
+  const f = { title: 3, measure: 3, question: 5, unit: 1, source: 3 };
   for (const [k, min] of Object.entries(f)) if (typeof out[k] !== 'string' || out[k].trim().length < min) return { ok: false, reason: 'The question was incomplete. Try rephrasing.' };
-  return { ok: true, reason: '', terms: { question: out.question.trim().slice(0, 400), unit: out.unit.trim().slice(0, 20), source: out.source.trim().slice(0, 200) } };
+  return { ok: true, reason: '', terms: { title: out.title.trim().slice(0, 60), measure: out.measure.trim().slice(0, 80), question: out.question.trim().slice(0, 400), unit: out.unit.trim().slice(0, 20), source: out.source.trim().slice(0, 200) } };
 }
 
 export function validateNumberResolution(out) {

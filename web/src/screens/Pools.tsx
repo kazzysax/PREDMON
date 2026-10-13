@@ -6,7 +6,7 @@ import { ASSETS, OPEN_ASSET, commitmentFor, fromPrice, poolsAbi, publicClient, r
 import { requireStepUp, sendAndWait } from '../wallet';
 import { Avatar, Curve, Icon, Sheet, timeLeft, trimNum, when } from '../ui';
 
-type Question = { question: string; unit: string; source: string; resultTime: number };
+type Question = { title?: string; measure?: string; question: string; unit: string; source: string; resultTime: number };
 type Pool = {
   id: number; creator: { username?: string; wallet?: string; avatar?: string | null }; asset: number; entryAmount: string;
   lockTime: number; resultTime: number; entries: number; revealed: number; priced: boolean;
@@ -119,9 +119,10 @@ function NewPool({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
   if (checked && kind === 'open') {
     return (
       <Sheet onClose={onCancel}>
-        <h2 className="h2">This is how it settles</h2>
+        <h2 className="h2">{checked.terms.title || 'This is how it settles'}</h2>
+        <p className="lede">{checked.terms.measure || checked.terms.question}</p>
         <dl className="terms">
-          <div><dt>Question</dt><dd>{checked.terms.question}</dd></div>
+          <div><dt>Full question</dt><dd>{checked.terms.question}</dd></div>
           <div className="two"><div><dt>Answer is a number in</dt><dd>{checked.terms.unit}</dd></div><div><dt>Entry</dt><dd>{trimNum(entry)} MON</dd></div></div>
           <div><dt>Settled from</dt><dd>{checked.terms.source}</dd></div>
           <div><dt>Answer is read</dt><dd>{when(checked.terms.resultTime)}</dd></div>
@@ -278,7 +279,9 @@ function PoolCard({ pool, mine, addMine, reload }: { pool: Pool; mine: Mine[]; a
         <span className="tag dim end"><Icon name="people" />{pool.entries}</span>
       </div>
 
-      <p className="said"><mark className="block" style={{ marginTop: 0 }}>{title}</mark></p>
+      <p className="said"><mark className="block" style={{ marginTop: 0 }}>{isOpen(pool) && pool.question?.title ? pool.question.title : title}</mark></p>
+      {isOpen(pool) && pool.question?.measure && <p className="lede" style={{ margin: '6px 0 4px', fontWeight: 600 }}>{pool.question.measure}</p>}
+      {isOpen(pool) && pool.question?.title && <p className="fine">{pool.question.question}</p>}
       {isOpen(pool) && pool.question && <p className="fine">Answer in {pool.question.unit}. Settled from {pool.question.source}. Read {when(pool.resultTime)}.</p>}
 
       {values.length >= 3 && (

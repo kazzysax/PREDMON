@@ -16,6 +16,7 @@ await c.deploymentTransaction().wait();
 const addr = await c.getAddress(); console.log('Pools', addr);
 await t('settler', c.setSettler(settler));
 for (const [id, feed] of Object.entries(addrs.priceFeeds)) await t('asset ' + id, c.setAsset(Number(id), true, feed, Number(await old.assetMaxAge(Number(id)))));
+await t('open questions (slot 7)', c.setAsset(7, true, ethers.ZeroAddress, 3600));
 await t('ownership offered', c.transferOwnership(owner.address));
 const mine = c.connect(owner);
 await t('ownership accepted', mine.acceptOwnership());

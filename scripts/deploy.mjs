@@ -34,6 +34,7 @@ export async function deploy({
   await send('Calls settler', calls.c.setSettler(settler));
   await send('Pools settler', pools.c.setSettler(settler));
   for (const a of assets) await send(`Pools asset ${a.id}`, pools.c.setAsset(a.id, true, a.feed ?? ethers.ZeroAddress, a.maxAge ?? 3600));
+await send('Pools open questions (slot 7)', pools.c.setAsset(7, true, ethers.ZeroAddress, 3600));
 
   // Hand over ownership last. Reputation transfers at once; Calls and Pools need `acceptOwnership` from the new owner.
   const me = await signer.getAddress();
