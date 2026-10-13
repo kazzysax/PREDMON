@@ -100,10 +100,13 @@ export function createJobs({ cfg, db, chain, ai, log = console }) {
         // No price feed: the AI resolver looks the number up from public sources. It retries
         // a few times (the event may not have finished); if it never gets a sourced answer the
         // pool refunds itself after 24h.
-        if ((row.price_attempts ?? 0) >= 6) return;
+        // Look again every 2 minutes for about 3 hours: a match with extra time or a late report still settles.
+        // The contract refunds everyone by itself 24 hours after the result time if no number is ever posted.
+        if ((row.price_attempts ?? 0) >= 90) return;
+        if (now - Number(row.price_last ?? 0) < 120) return;
         const q = db.prepare('SELECT terms_json FROM pool_questions WHERE hash=?').get(String(p.questionHash).toLowerCase());
         if (!q) return;
-        db.prepare('UPDATE pools SET price_attempts=price_attempts+1 WHERE id=?').run(id);
+        db.prepare('UPDATE pools SET price_attempts=price_attempts+1, price_last=? WHERE id=?').run(now, id);
         try {
           const terms = JSON.parse(q.terms_json);
           const r = await ai.resolveNumber(terms, new Date(Number(p.resultTime) * 1000).toISOString());
