@@ -62,6 +62,9 @@ export function Calls({ composing, setComposing }: { composing: boolean; setComp
 }
 
 function Composer({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
+  const { config, account } = useApp();
+  const [prize, setPrize] = useState('');
+  const [posted, setPosted] = useState<{ id: number; failed: string } | null>(null);
   const [post, setPost] = useState('');
   const [life, setLife] = useState(86400);
   const [draft, setDraft] = useState<{ draftId: string; terms: Terms } | null>(null);
@@ -78,9 +81,35 @@ function Composer({ onCreated, onClose }: { onCreated: () => void; onClose: () =
   const confirm = async () => {
     if (!draft) return;
     setBusy(true);
-    try { await api('/api/calls/confirm', { body: { draftId: draft.draftId } }); onCreated(); }
+    try {
+      const made = await api<{ id: number }>('/api/calls/confirm', { body: { draftId: draft.draftId } });
+      const amount = Number(prize);
+      if (amount > 0 && config.addresses.prizes) {
+        try {
+          await sendAndWait(account, { address: config.addresses.prizes, abi: prizesAbi, functionName: 'addPrize', args: [BigInt(made.id)], value: parseEther(prize), gas: 200_000n });
+        } catch (e: any) {
+          // The post is already up. Say so plainly instead of pretending nothing happened.
+          setPosted({ id: made.id, failed: e.shortMessage ?? e.message }); return;
+        }
+      }
+      onCreated();
+    }
     catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
   };
+
+  const prizeOk = prize === '' || (Number(prize) > 0 && Number(prize) <= 100000);
+  const prizeNote = Number(prize) > 0 ? `${trimNum(prize)} MON prize, shared equally by everyone on the winning side.` : '';
+
+  if (posted) {
+    return (
+      <Sheet onClose={onCreated}>
+        <h2 className="h2">Your post is up.</h2>
+        <p className="err" role="alert">The prize did not go through: {posted.failed}</p>
+        <p className="small">Nothing was taken from your balance. Prizes can only be set when a post is made, so this one stays without a prize.</p>
+        <div className="foot" style={{ paddingTop: 4 }}><button className="btn" onClick={onCreated}>Done</button></div>
+      </Sheet>
+    );
+  }
 
   if (draft) {
     return (
@@ -88,6 +117,7 @@ function Composer({ onCreated, onClose }: { onCreated: () => void; onClose: () =
         <h2 className="h2">This is how it settles</h2>
         <PostBody post={draft.terms.post} highlight={draft.terms.highlight} question={draft.terms.question} lg />
         <TermsBox terms={draft.terms} />
+        {prizeNote && <p className="info"><b>Prize.</b> {prizeNote} It is sent when you post and cannot be changed.</p>}
         <p className="small">Your words are what gets posted. The underlined line is the call. Once it's up: no edits.</p>
         {msg && <p className="err" role="alert">{msg}</p>}
         <div className="foot" style={{ paddingTop: 4 }}>
@@ -110,9 +140,18 @@ function Composer({ onCreated, onClose }: { onCreated: () => void; onClose: () =
           {LIVES.map(l => <button key={l.sec} className={life === l.sec ? 'on' : ''} onClick={() => setLife(l.sec)}>{l.label}</button>)}
         </div>
       </div>
+      {config.addresses.prizes && (
+        <div>
+          <span className="label">Prize for the winners <small>(optional)</small></span>
+          <div className="entry">
+            <input className="in" inputMode="decimal" value={prize} onChange={e => setPrize(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="MON, leave empty for none" aria-label="Prize in MON" />
+          </div>
+          <p className="fine">Shared equally by everyone on the winning side. Set now, not editable later.</p>
+        </div>
+      )}
       {msg && <p className="err" role="alert">{msg}</p>}
       <div className="foot" style={{ paddingTop: 4 }}>
-        <button className="btn" disabled={busy || post.trim().length < 10} onClick={check}>{busy ? 'Reading it…' : 'Continue'}</button>
+        <button className="btn" disabled={busy || post.trim().length < 10 || !prizeOk} onClick={check}>{busy ? 'Reading it…' : 'Continue'}</button>
         <button className="text-btn" onClick={onClose}>Cancel</button>
       </div>
     </Sheet>
@@ -130,8 +169,6 @@ function PrizeBox({ call }: { call: Call }) {
   const [reg, setReg] = useState(false);
   const [paid, setPaid] = useState(false);
   const [mine, setMine] = useState(0n);
-  const [amount, setAmount] = useState('');
-  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [tick, setTick] = useState(0);
@@ -158,13 +195,13 @@ function PrizeBox({ call }: { call: Call }) {
   const iWon = call.state === 'finalized' && call.viewerSide === (call.outcome === 1 ? 'yes' : 'no');
   const windowOpen = call.state === 'finalized' && endsAt > now;
   const windowOver = call.state === 'finalized' && endsAt > 0 && endsAt <= now;
-  if (total === 0n && !voting && mine === 0n) return null;
+  if (total === 0n && mine === 0n) return null;
 
-  const run = async (fn: 'addPrize' | 'register' | 'collect' | 'refund', value?: bigint) => {
+  const run = async (fn: 'register' | 'collect' | 'refund', value?: bigint) => {
     setMsg(''); setBusy(true);
     try {
       await sendAndWait(account, { address: prizes, abi: prizesAbi, functionName: fn, args: [BigInt(call.id)], value, gas: 200_000n });
-      setAdding(false); setAmount(''); setTick(t => t + 1);
+      setTick(t => t + 1);
     } catch (e: any) { setMsg(e.shortMessage ?? e.message); } finally { setBusy(false); }
   };
 
@@ -179,17 +216,10 @@ function PrizeBox({ call }: { call: Call }) {
           {windowOver && reg && paid && <span className="small">Collected</span>}
         </div>
       )}
-      {voting && !adding && <button className="btn quiet sm" onClick={() => setAdding(true)}>{total > 0n ? 'Add to the prize' : 'Add a prize for the winners'}</button>}
-      {voting && adding && (
-        <div className="entry">
-          <input className="in" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="MON to add" aria-label="Prize amount in MON" />
-          <button className="btn sm" disabled={busy || !(Number(amount) > 0)} onClick={() => run('addPrize', parseEther(amount))}>{busy ? '…' : 'Add'}</button>
-        </div>
-      )}
       {(call.state === 'void' || (windowOver && winners === 0)) && mine > 0n && (
         <button className="btn quiet sm" disabled={busy} onClick={() => run('refund')}>Take back your {trimNum(formatEther(mine))} MON</button>
       )}
-      {voting && <p className="fine">The prize is split equally between everyone on the winning side. Added before voting closes. Not editable.</p>}
+      {voting && total > 0n && <p className="fine">Split equally between everyone on the winning side.</p>}
       {msg && <p className="err" role="alert">{msg}</p>}
     </div>
   );
@@ -248,7 +278,6 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
     if (!preview) {
       const wc = await walletClientFor(account);
       sig = await wc.signTypedData({
-        account: account.address,
         domain: { name: 'PredMon Calls', version: '1', chainId: config.chainId, verifyingContract: config.addresses.calls },
         types: { Vote: [
           { name: 'marketId', type: 'uint256' }, { name: 'yes', type: 'bool' },

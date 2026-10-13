@@ -164,7 +164,7 @@ async function sendValue(account: any, to: `0x${string}`, value: bigint) {
   const { walletClientFor } = await import('../wallet');
   const { publicClient } = await import('../chain');
   const wc = await walletClientFor(account);
-  const hash = await wc.sendTransaction({ to, value, account: account.address } as never);
+  const hash = await wc.sendTransaction({ to, value } as never);
   const rc = await publicClient.waitForTransactionReceipt({ hash });
   if (rc.status !== 'success') throw new Error('The transfer failed.');
   return hash;

@@ -1,5 +1,5 @@
 // Everything that needs the user's wallet: signing, sending, and the passkey check for big amounts.
-import { authenticatePasskeyMFA, getPasskeys, registerPasskey, NoPasskeyCredentialsFoundError } from '@dynamic-labs-sdk/client';
+import { authenticatePasskeyMFA, getActiveNetworkData, getPasskeys, registerPasskey, switchActiveNetwork, NoPasskeyCredentialsFoundError } from '@dynamic-labs-sdk/client';
 import { createWalletClientForWalletAccount } from '@dynamic-labs-sdk/evm/viem';
 import type { Address } from 'viem';
 import { publicClient } from './chain';
@@ -11,7 +11,20 @@ export function pickAccount(accounts: any[] | undefined) {
   return evm.find(a => /waas|embedded|dynamic/i.test(a.walletProviderKey ?? '')) ?? evm[0] ?? null;
 }
 
+/** Monad's id in Dynamic. The project lists Ethereum first, so a wallet starts on Ethereum unless we say otherwise. */
+const MONAD_ID = '143';
+
+/** Make sure the wallet is on Monad before it signs or sends anything. */
+export async function ensureMonad(account: any) {
+  try {
+    const { networkData } = await getActiveNetworkData({ walletAccount: account });
+    if (String(networkData?.networkId) === MONAD_ID) return;
+  } catch { /* fall through and switch */ }
+  await switchActiveNetwork({ walletAccount: account, networkId: MONAD_ID });
+}
+
 export async function walletClientFor(account: any) {
+  await ensureMonad(account);
   return createWalletClientForWalletAccount({ walletAccount: account });
 }
 
