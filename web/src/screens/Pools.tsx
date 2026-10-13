@@ -71,17 +71,20 @@ function NewPool({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
   const { config, account } = useApp();
   const [kind, setKind] = useState<'open' | number>('open');
   const [question, setQuestion] = useState('');
-  const [at, setAt] = useState('');
+  const [hours, setHours] = useState(24);
   const [entry, setEntry] = useState('10');
   const [checked, setChecked] = useState<{ hash: `0x${string}`; terms: Question } | null>(null);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // The creator does not pick the moment. Price pools use a fixed time on the hour; questions use the end time the checker found.
   const when_ = () => {
-    const t = Math.floor(new Date(at).getTime() / 1000);
-    if (!t) throw new Error('Pick the moment the answer is read.');
-    if (t < Date.now() / 1000 + 3.5 * 3600) throw new Error('The result time must be at least 3 and a half hours away.');
-    return t;
+    if (kind === 'open') {
+      const t = checked?.terms.resultTime ?? 0;
+      if (!t) throw new Error('Check the question first.');
+      return t;
+    }
+    return Math.ceil((Date.now() / 1000 + hours * 3600) / 3600) * 3600;
   };
   const amount = () => {
     const n = Number(entry);
@@ -93,9 +96,9 @@ function NewPool({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
   const check = async () => {
     setMsg(''); setBusy(true);
     try {
-      const t = when_(); amount();
+      amount();
       if (question.trim().length < 10) throw new Error('Ask your question in a few words, for example "How many goals will Man City score on Saturday?"');
-      const r = await api<any>('/api/pools/check', { body: { question, resultTime: t } });
+      const r = await api<any>('/api/pools/check', { body: { question } });
       if (!r.ok) setMsg(r.reason); else setChecked({ hash: r.hash, terms: r.terms });
     } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
   };
@@ -151,14 +154,23 @@ function NewPool({ onDone, onCancel }: { onDone: () => void; onCancel: () => voi
             placeholder="How many goals will Man City score on Saturday?" aria-label="Your question" />
         </label>
       )}
-      <label><span className="label">The answer is read</span>
-        <input className="in" type="datetime-local" value={at} onChange={e => setAt(e.target.value)} />
-      </label>
+      {kind === 'open'
+        ? <p className="fine">We find when the answer is final (full time, extra time included) and read it a few minutes after.</p>
+        : (
+          <div>
+            <span className="label">The price is read in</span>
+            <div className="amounts">
+              {[[6, '6 hours'], [12, '12 hours'], [24, '1 day'], [72, '3 days'], [168, '7 days'], [336, '14 days'], [696, '29 days']].map(([h, l]) => (
+                <button key={h} className={hours === h ? 'on' : ''} onClick={() => setHours(h as number)}>{l}</button>
+              ))}
+            </div>
+          </div>
+        )}
       <label><span className="label">Everyone pays, between 10 and 1000 MON</span>
         <input className="in" inputMode="decimal" value={entry} onChange={e => setEntry(e.target.value)} placeholder="10" />
       </label>
       {msg && <p className="err" role="alert">{msg}</p>}
-      <p className="fine">Entries close 3 hours before the answer is read. Three pools a day.</p>
+      <p className="fine">Entries close 3 hours before the answer is read. Pools run up to 30 days. Three pools a day.</p>
       <div className="foot" style={{ paddingTop: 0 }}>
         {kind === 'open'
           ? <button className="btn" disabled={busy} onClick={check}>{busy ? 'Reading it…' : 'Continue'}</button>

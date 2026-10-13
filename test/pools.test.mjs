@@ -66,7 +66,7 @@ test('creation: asset enabled, entry within the cap, windows, three a day', asyn
   await reverts(pools.connect(S.creator).createPool(0, ok, E('9.9'), ethers.id('q')), 'BadEntryAmount');
   await reverts(pools.connect(S.creator).createPool(0, ok, E('60.1'), ethers.id('q')), 'BadEntryAmount');
   await reverts(pools.connect(S.creator).createPool(0, t + 3 * HOUR, E('50'), ethers.id('q')), 'BadWindow');
-  await reverts(pools.connect(S.creator).createPool(0, t + 8 * DAY, E('50'), ethers.id('q')), 'BadWindow');
+  await reverts(pools.connect(S.creator).createPool(0, t + 31 * DAY, E('50'), ethers.id('q')), 'BadWindow');
   await reverts(pools.connect(S.users[0]).setMaxEntry(E('1000')), 'NotOwner');
   await wait(pools.connect(S.creator).createPool(0, ok, E('60'), ethers.id('q')));
   await wait(pools.connect(S.creator).createPool(0, ok, E('50'), ethers.id('q')));

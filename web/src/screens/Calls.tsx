@@ -16,7 +16,7 @@ type Call = {
   evidence?: { reasoning: string; evidence: { title: string; url: string }[] };
 };
 
-const LIVES = [{ label: '1 hour', sec: 3600 }, { label: '6 hours', sec: 6 * 3600 }, { label: '1 day', sec: 86400 }, { label: '3 days', sec: 3 * 86400 }, { label: '7 days', sec: 7 * 86400 }];
+const LIVES = [{ label: '1 hour', sec: 3600 }, { label: '6 hours', sec: 6 * 3600 }, { label: '1 day', sec: 86400 }, { label: '3 days', sec: 3 * 86400 }, { label: '7 days', sec: 7 * 86400 }, { label: '14 days', sec: 14 * 86400 }, { label: '30 days', sec: 30 * 86400 }];
 const STAKES = ['Free', '5', '25', '100'];
 /** Only offer amounts the contract will accept; the cap is set on chain and can change. */
 const stakeChoices = (cap: number) => {

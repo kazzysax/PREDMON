@@ -37,7 +37,7 @@ test('only the gate opens markets, inside the 5 minute to 7 day window, with a v
   const t = await now();
   await reverts(calls.connect(S.users[0]).createMarket(S.creator.address, 0, ethers.id('x'), t + HOUR), 'NotAuthorized');
   await reverts(calls.connect(S.gate).createMarket(S.creator.address, 0, ethers.id('x'), t + 60), 'BadWindow');
-  await reverts(calls.connect(S.gate).createMarket(S.creator.address, 0, ethers.id('x'), t + 8 * DAY), 'BadWindow');
+  await reverts(calls.connect(S.gate).createMarket(S.creator.address, 0, ethers.id('x'), t + 31 * DAY), 'BadWindow');
   await reverts(calls.connect(S.gate).createMarket(S.creator.address, 5, ethers.id('x'), t + HOUR), 'BadCategory');
 });
 

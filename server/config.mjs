@@ -37,7 +37,7 @@ export function loadConfig(overrides = {}) {
       votesPerDay: Number(env.VOTES_PER_DAY || 200),
       commentsPerDay: Number(env.COMMENTS_PER_DAY || 100),
       minLifeSec: 300,
-      maxLifeSec: 7 * 86400,
+      maxLifeSec: 30 * 86400,
     },
     gas: {
       createMarket: Number(env.GAS_CREATE || 300_000),

@@ -66,7 +66,7 @@ contract Pools is Base {
 
     uint64 public constant LOCK_BEFORE = 3 hours;
     uint64 public constant MIN_ENTRY_WINDOW = 30 minutes;
-    uint64 public constant MAX_HORIZON = 7 days;
+    uint64 public constant MAX_HORIZON = 30 days;
     /// Price must be posted within this long after the result time.
     uint64 public constant REPORT_WINDOW = 24 hours;
     /// Ranking must finish within this long after the price is posted.

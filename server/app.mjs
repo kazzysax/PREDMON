@@ -139,7 +139,7 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
     const question = cleanPost(body.post ?? body.question);
     if (question.length < 10 || question.length > 1500) throw httpError(400, 'write your post in 10-1500 characters');
     const lifeSec = Math.floor(Number(body.lifeSec));
-    if (!(lifeSec >= cfg.limits.minLifeSec && lifeSec <= cfg.limits.maxLifeSec)) throw httpError(400, 'a call lives between 5 minutes and 7 days');
+    if (!(lifeSec >= cfg.limits.minLifeSec && lifeSec <= cfg.limits.maxLifeSec)) throw httpError(400, 'a call lives between 5 minutes and 30 days');
     assertCallQuota(u.id);
     let g;
     try { g = await ai.gate(question, lifeSec); } catch { throw httpError(503, 'the call checker is unavailable, try again soon'); }
@@ -350,11 +350,16 @@ export function createApp({ cfg, db, chain, ai, verify, jobs }) {
     if (!u.username) throw httpError(400, 'pick a username first');
     const question = cleanPost(body.question);
     if (question.length < 10 || question.length > 400) throw httpError(400, 'write your question in 10-400 characters');
-    const resultTime = Math.floor(Number(body.resultTime));
-    if (!(resultTime > Date.now() / 1000)) throw httpError(400, 'pick a result time in the future');
+    const suggested = Math.floor(Number(body.resultTime)) || 0;
     let g;
-    try { g = await ai.numberGate(question, new Date(resultTime * 1000).toISOString()); } catch { throw httpError(503, 'the question checker is unavailable, try again soon'); }
+    try { g = await ai.numberGate(question, suggested > 0 ? new Date(suggested * 1000).toISOString() : ''); } catch { throw httpError(503, 'the question checker is unavailable, try again soon'); }
     if (!g.ok) return { ok: false, reason: g.reason };
+    // The checker works out when the answer is final (full time, extra time included). The creator does not pick it.
+    const resultTime = Math.floor(Number(g.terms.resultTime ?? suggested));
+    const nowS = Math.floor(Date.now() / 1000);
+    if (!(resultTime > 0)) return { ok: false, reason: 'We could not tell when the answer will be known. Name the event and the day, for example "Arsenal vs Lille on Thursday".' };
+    if (resultTime < nowS + 3.5 * 3600) return { ok: false, reason: 'That event ends too soon. Entries close 3 hours before the answer is read, so pick something at least four hours away.' };
+    if (resultTime > nowS + 30 * 86400 - 3600) return { ok: false, reason: 'That is more than 30 days away. Pools can run up to 30 days.' };
     const terms = { ...g.terms, resultTime };
     const hash = termsHash(terms);
     db.prepare('INSERT OR REPLACE INTO pool_questions(hash,creator,terms_json,created_at) VALUES(?,?,?,?)').run(hash.toLowerCase(), u.wallet, JSON.stringify(terms), Math.floor(Date.now() / 1000));

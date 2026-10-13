@@ -43,8 +43,9 @@ Rules:
 
 const NUMBER_SYSTEM = `A person wants to open a pool where everyone guesses ONE NUMBER and the closest guess wins. Check their question and tidy it.
 Reply with ONE JSON object and nothing else:
-{"ok": boolean, "reason": string, "title": string, "measure": string, "question": string, "unit": string, "source": string}
+{"ok": boolean, "reason": string, "title": string, "measure": string, "question": string, "unit": string, "source": string, "resultAt": string}
 Rules:
+- "resultAt" is the moment the number is final, as an ISO 8601 UTC time. Work it out yourself from the event: for a football match use kickoff plus 2 hours 30 minutes (3 hours 15 minutes if extra time is possible, such as a cup knockout); for other events use the official end plus a short margin; for a price or reading at a stated time use that time. Use web search to find the real kickoff or end. If you cannot tell when the event happens, set ok=false and ask the person to name the event and date.
 - "title" is the main subject, short and plain, like a headline: "Arsenal vs Lille", "Bitcoin price", "Lagos temperature". Under 45 characters. Name the subject only, not the question.
 - "measure" says exactly what number is asked, in a few words: "Goals scored by Arsenal", "Total goals in the match", "Closing price in USD". A score is not one number, so for scores ask for one number such as goals by one team or total goals. Under 60 characters.
 - The answer must be a single number that a public, checkable source will show at a known time (a price, a score, a count, a temperature, a date expressed as a number of days). Opinions and yes/no questions are not allowed: set ok=false with a short reason.
@@ -120,7 +121,7 @@ export function createAi({ apiKey, model, openrouterKey = '', openrouterModel = 
     },
     /** Checks a numeric pool question. Returns {ok, reason, terms:{question,unit,source}}. */
     async numberGate(question, resultIso, nowIso = new Date().toISOString()) {
-      const text = await ask(NUMBER_SYSTEM, `Now: ${nowIso}\nThe result is read at: ${resultIso}\nQuestion:\n${question}`);
+      const text = await ask(NUMBER_SYSTEM, `Now: ${nowIso}\n${resultIso ? `The person suggested reading the result at: ${resultIso}\n` : ''}Question:\n${question}`, { search: true });
       let out;
       try { out = firstJson(text); } catch { return { ok: false, reason: 'Could not turn that into a clear numeric question. Try rephrasing.' }; }
       return validateNumberGate(out);
@@ -156,8 +157,9 @@ export function validateGate(out) {
 export function validateNumberGate(out) {
   if (!out || out.ok !== true) return { ok: false, reason: String(out?.reason ?? 'That cannot be settled as a single number.').slice(0, 300) };
   const f = { title: 3, measure: 3, question: 5, unit: 1, source: 3 };
+  const at = Date.parse(String(out.resultAt ?? ''));
   for (const [k, min] of Object.entries(f)) if (typeof out[k] !== 'string' || out[k].trim().length < min) return { ok: false, reason: 'The question was incomplete. Try rephrasing.' };
-  return { ok: true, reason: '', terms: { title: out.title.trim().slice(0, 60), measure: out.measure.trim().slice(0, 80), question: out.question.trim().slice(0, 400), unit: out.unit.trim().slice(0, 20), source: out.source.trim().slice(0, 200) } };
+  return { ok: true, reason: '', terms: { title: out.title.trim().slice(0, 60), measure: out.measure.trim().slice(0, 80), question: out.question.trim().slice(0, 400), unit: out.unit.trim().slice(0, 20), source: out.source.trim().slice(0, 200), ...(Number.isFinite(at) ? { resultTime: Math.floor(at / 1000) } : {}) } };
 }
 
 export function validateNumberResolution(out) {

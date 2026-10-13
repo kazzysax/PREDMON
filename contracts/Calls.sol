@@ -59,7 +59,7 @@ contract Calls is Base {
     /// A market nobody settled can be voided by anyone after this long.
     uint64 public constant STALE_AFTER = 7 days;
     uint64 public constant MIN_LIFE = 5 minutes;
-    uint64 public constant MAX_LIFE = 7 days;
+    uint64 public constant MAX_LIFE = 30 days;
     /// Reputation at stake per call, x100. Win pays K*(1-s), loss costs K*s.
     uint256 public constant K = 1_000;
     /// Author's cut of the losing pool.
