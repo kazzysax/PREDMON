@@ -346,3 +346,33 @@ textarea.in { min-height: 170px; line-height: 1.5; resize: none; font-size: 16px
 .check input { margin-top: 3px; }
 .exportbox { min-height: 0; }
 .exportbox iframe { width: 100%; min-height: 220px; border: 0; border-radius: var(--r-sm); }
+
+/* Reputation-first entry */
+.standing { background: var(--card); border-radius: var(--r-card); padding: 16px 16px 14px; display: grid; gap: 12px; }
+.st-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.st-rec { font-size: 12.5px; color: var(--muted); }
+.st-main { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.st-main > div { display: grid; gap: 2px; }
+.st-main b { font-size: 30px; font-weight: 500; letter-spacing: -0.04em; line-height: 1; }
+.st-main span { font-size: 12px; color: var(--muted); }
+.st-mult { color: var(--yes); }
+.st-bar { height: 5px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+.st-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--orange), #ffb27a); transition: width .6s ease; }
+.st-why { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.leaders { display: grid; gap: 8px; }
+.ld-head { display: flex; justify-content: space-between; align-items: center; }
+.ld-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.ld-row::-webkit-scrollbar { display: none; }
+.ld { flex: none; width: 118px; background: var(--card); border-radius: 14px; padding: 12px 10px; display: grid; justify-items: center; gap: 4px; text-align: center; position: relative; }
+.ld b { font-size: 13px; font-weight: 500; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ld .num { font-size: 18px; letter-spacing: -0.03em; }
+.ld small { font-size: 11px; color: var(--muted); }
+.ld-pos { position: absolute; top: 8px; left: 10px; font-size: 11px; color: var(--faint); }
+.weigh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; color: var(--soft); }
+.weigh b { color: var(--yes); font-size: 17px; font-weight: 500; }
+.weigh small { font-size: 12px; color: var(--muted); text-align: right; }
+.backing { display: grid; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); }
+.ld-head .cap { white-space: nowrap; }
+.ld-head .text-btn { flex: none; }
+.weigh > span { white-space: nowrap; }
+.weigh small { flex: 1; }

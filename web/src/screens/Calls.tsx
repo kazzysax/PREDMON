@@ -25,17 +25,92 @@ const stakeChoices = (cap: number) => {
   return ['Free', ...(ok.length ? ok : ['1'])];
 };
 
-export function Calls({ composing, setComposing }: { composing: boolean; setComposing: (v: boolean) => void }) {
+
+type Rep = { category: number; name: string; score: number; scored: number; won: number };
+const repCache = new Map<string, Promise<Rep[]>>();
+/** A person's public record, fetched once per name. */
+const repFor = (username?: string | null): Promise<Rep[]> => {
+  if (!username) return Promise.resolve([]);
+  if (!repCache.has(username)) repCache.set(username, api<{ reputation: Rep[] }>(`/api/users/${encodeURIComponent(username)}`).then(r => r.reputation ?? []).catch(() => []));
+  return repCache.get(username)!;
+};
+/** Mirrors the contract: reputation gives 1x to 2x, and an early vote gets up to 1.2x on top, sliding to 1x at lock. */
+export const voteWeight = (score: number, opensAt: number, locksAt: number, now: number) => {
+  const rep = 1 + Math.min(Math.max(score, 0), 100) / 100;
+  const span = locksAt - opensAt;
+  const early = span > 0 && now < locksAt ? 1 + (0.2 * (locksAt - now)) / span : 1;
+  return rep * early;
+};
+const fmtX = (n: number) => `${n.toFixed(2).replace(/0$/, '')}x`;
+
+/** The top of the entry page: where you stand, and why it matters more than money here. */
+function Standing({ category }: { category: string }) {
+  const { me, config } = useApp();
+  const reps = me.reputation ?? [];
+  const cat = category !== '' ? Number(category) : [...reps].sort((a, b) => b.score - a.score)[0]?.category ?? 0;
+  const r = reps.find(x => x.category === cat) ?? { score: 0, scored: 0, won: 0, name: config.categories[cat] ?? '' };
+  const mult = 1 + Math.min(Math.max(r.score, 0), 100) / 100;
+  const pct = r.scored ? Math.round((r.won / r.scored) * 100) : 0;
+  return (
+    <section className="standing" aria-label="Your standing">
+      <div className="st-top">
+        <span className="cap">Your standing in {config.categories[cat]}</span>
+        <span className="st-rec">{r.scored ? `${r.won} of ${r.scored} right` : 'No record yet'}</span>
+      </div>
+      <div className="st-main">
+        <div><b className="num st-score">{r.score.toFixed(1)}</b><span>reputation</span></div>
+        <div><b className="num st-mult">{fmtX(mult)}</b><span>vote weight</span></div>
+        <div><b className="num st-pct">{r.scored ? `${pct}%` : '—'}</b><span>hit rate</span></div>
+      </div>
+      <div className="st-bar" aria-hidden><i style={{ width: `${Math.min(Math.max(r.score, 0), 100)}%` }} /></div>
+      <p className="st-why">{r.scored ? 'Every call you get right raises this, and a higher number pulls the room harder.' : 'Take a side on your first call. Being right early is how you build a name here.'} MON can back a call, but it never moves the bar.</p>
+    </section>
+  );
+}
+
+/** Who to listen to: the best record in the category being browsed. */
+function Leaders({ category, onOpen }: { category: string; onOpen: () => void }) {
+  const { config, me } = useApp();
+  const cat = category !== '' ? Number(category) : 0;
+  const [rows, setRows] = useState<any[] | null>(null);
+  useEffect(() => { setRows(null); api<{ board: any[] }>(`/api/leaderboard?category=${cat}`).then(r => setRows(r.board.slice(0, 6))).catch(() => setRows([])); }, [cat]);
+  if (!rows || rows.length === 0) return null;
+  return (
+    <section className="leaders" aria-label="Top callers">
+      <div className="ld-head"><span className="cap">Top callers · {config.categories[cat]}</span><button className="text-btn" onClick={onOpen}>See all</button></div>
+      <div className="ld-row">
+        {rows.map((r, i) => (
+          <div key={r.username} className="ld">
+            <span className="ld-pos">{i + 1}</span>
+            <Avatar name={r.username} src={r.avatar} size="sm" />
+            <b>@{r.username}</b>
+            <span className="num">{r.score.toFixed(1)}</span>
+            <small>{r.won}/{r.scored} right</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function Calls({ composing, setComposing, openPeople }: { composing: boolean; setComposing: (v: boolean) => void; openPeople?: () => void }) {
   const { config } = useApp();
-  const [feed, setFeed] = useState<'explore' | 'following'>('explore');
+  const [feed, setFeed] = useState<'explore' | 'following' | 'top'>('explore');
   const [category, setCategory] = useState('');
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const q = new URLSearchParams({ feed, ...(category ? { category } : {}) });
-      setCalls((await api<{ calls: Call[] }>(`/api/calls?${q}`)).calls);
+      const q = new URLSearchParams({ feed: feed === 'following' ? 'following' : 'explore', ...(category ? { category } : {}) });
+      let list = (await api<{ calls: Call[] }>(`/api/calls?${q}`)).calls;
+      if (feed === 'top') {
+        // Best record first: order by the author's reputation in the call's own category.
+        const score = new Map<number, number>();
+        await Promise.all(list.map(async c => { score.set(c.id, (await repFor(c.creator?.username)).find(r => r.category === c.category)?.score ?? 0); }));
+        list = [...list].sort((a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0));
+      }
+      setCalls(list);
       setErr('');
     } catch (e: any) { setErr(e.message); }
   }, [feed, category]);
@@ -45,6 +120,7 @@ export function Calls({ composing, setComposing }: { composing: boolean; setComp
     <>
       <div className="filters">
         <button className={`filter lead ${feed === 'explore' ? 'on' : ''}`} onClick={() => setFeed('explore')}>Explore</button>
+        <button className={`filter lead ${feed === 'top' ? 'on' : ''}`} onClick={() => setFeed('top')}>Top callers</button>
         <button className={`filter lead ${feed === 'following' ? 'on' : ''}`} onClick={() => setFeed('following')}>Following</button>
       </div>
       <div className="filters" style={{ paddingTop: 8, paddingBottom: 14 }}>
@@ -54,6 +130,8 @@ export function Calls({ composing, setComposing }: { composing: boolean; setComp
         ))}
       </div>
       <div className="page draw">
+        <Standing category={category} />
+        <Leaders category={category} onOpen={() => openPeople?.()} />
         {err && <p className="err" role="alert">{err}</p>}
         {calls && calls.length === 0 && !err && (
           feed === 'following'
@@ -262,6 +340,12 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
   const [claimable, setClaimable] = useState<bigint>(call.claimable ? parseEther(call.claimable) : 0n);
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
   useEffect(() => { const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000); return () => clearInterval(t); }, []);
+  const { me } = useApp();
+  const [authorRep, setAuthorRep] = useState<Rep | null>(null);
+  const [backing, setBacking] = useState(false);
+  useEffect(() => { let on = true; repFor(call.creator?.username).then(r => { if (on) setAuthorRep(r.find(x => x.category === call.category) ?? null); }); return () => { on = false; }; }, [call.creator?.username, call.category]);
+  const myScore = me.reputation?.find(r => r.category === call.category)?.score ?? 0;
+  const myWeight = voteWeight(myScore, call.opensAt, call.locksAt, now);
 
   const voting = call.state === 'open' && now < call.locksAt;
   const settled = call.state === 'finalized' || call.state === 'void';
@@ -308,10 +392,10 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
   };
 
   /** One tap: a free vote, or a staked one if an amount is picked. */
-  const wager = async (yes: boolean) => {
+  const wager = async (yes: boolean, amount: string = pick) => {
     setMsg(''); setBusy(true);
     try {
-      if (pick === 'Free') await freeVote(yes); else await stake(yes, pick);
+      if (amount === 'Free') await freeVote(yes); else await stake(yes, amount);
       setAdding(false); reload();
     } catch (e: any) { setMsg(e.shortMessage ?? e.message); } finally { setBusy(false); }
   };
@@ -339,9 +423,9 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
   const revealed = call.yesWeight !== undefined;
   const mySide = call.viewerSide === 'no' ? 'NO' : 'YES';
   const amounts = (
-    <div className="amounts" role="group" aria-label="How much to put on it">
-      {(adding ? stakeChoices(Number(config.maxStake)).slice(1) : stakeChoices(Number(config.maxStake))).map(s => (
-        <button key={s} className={pick === s ? 'on' : ''} onClick={() => setPick(s)}>{s === 'Free' ? 'Free' : `${s} MON`}</button>
+    <div className="amounts" role="group" aria-label="How much MON to put behind it">
+      {stakeChoices(Number(config.maxStake)).slice(1).map(s => (
+        <button key={s} className={pick === s ? 'on' : ''} onClick={() => setPick(s)}>{s} MON</button>
       ))}
     </div>
   );
@@ -374,6 +458,7 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
           <div className="meter" role="img" aria-label={`${yesPct}% said yes, ${100 - yesPct}% said no`}>
             <i className="y" style={{ width: `${yesPct}%` }} /><i className="n" style={{ flex: 1 }} />
           </div>
+          <p className="fine" style={{ textAlign: 'left', marginTop: 6 }}>Weighted by reputation, not by money.</p>
         </div>
       ) : voting ? (
         <div className="veil"><Icon name="eyeoff" />Take a side to read the room</div>
@@ -381,25 +466,39 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
 
       {voting && !call.viewerVoted && (
         <>
-          {amounts}
-          <div className="sides">
-            <button className="side yes" disabled={busy} onClick={() => wager(true)}>Yes</button>
-            <button className="side no" disabled={busy} onClick={() => wager(false)}>No</button>
+          <div className="weigh">
+            <span>Your vote weighs <b className="num">{fmtX(myWeight)}</b></span>
+            <small>{myScore > 0 ? `${call.categoryName} reputation ${myScore.toFixed(1)}` : `Build ${call.categoryName} reputation`}{myWeight > 1 + (myScore > 0 ? Math.min(myScore, 100) / 100 : 0) + 0.005 ? ' · early bonus' : ''}</small>
           </div>
-          <p className="fine">One wager. No edits. No exits.</p>
+          <div className="sides">
+            <button className="side yes" disabled={busy} onClick={() => wager(true, 'Free')}>Yes</button>
+            <button className="side no" disabled={busy} onClick={() => wager(false, 'Free')}>No</button>
+          </div>
+          <p className="fine">Right calls raise your reputation, wrong ones lower it. One call, no edits.</p>
+          {config.addresses.calls && (backing ? (
+            <div className="backing">
+              <span className="label">Back it with MON <small>(optional, does not change your weight)</small></span>
+              {amounts}
+              <div className="sides">
+                <button className="side yes" disabled={busy || pick === 'Free'} onClick={() => wager(true, pick)}>Yes · {pick === 'Free' ? 'pick an amount' : `${pick} MON`}</button>
+                <button className="side no" disabled={busy || pick === 'Free'} onClick={() => wager(false, pick)}>No · {pick === 'Free' ? 'pick an amount' : `${pick} MON`}</button>
+              </div>
+              <button className="text-btn" onClick={() => { setBacking(false); setPick('Free'); }}>Never mind, vote free</button>
+            </div>
+          ) : <button className="text-btn" onClick={() => { setBacking(true); setPick('5'); }}>Back it with MON too</button>)}
         </>
       )}
 
       {voting && call.viewerVoted && !adding && (
         <div className={`in-on ${call.viewerSide === 'no' ? 'no' : ''}`}>
           <i /><span style={{ color: 'inherit' }}>You're in on {mySide === 'YES' ? 'yes' : 'no'} <em>· locked</em></span>
-          <button className="btn quiet sm" onClick={() => { setAdding(true); setPick('5'); }}>Add MON</button>
+          <button className="btn quiet sm" onClick={() => { setAdding(true); setPick('5'); }}>Back with MON</button>
         </div>
       )}
       {voting && call.viewerVoted && adding && (
         <>
           {amounts}
-          <button className="btn" disabled={busy} onClick={() => wager(call.viewerSide !== 'no')}>{busy ? 'Confirming…' : `Stake ${pick} MON on ${mySide === 'YES' ? 'yes' : 'no'}`}</button>
+          <button className="btn" disabled={busy} onClick={() => wager(call.viewerSide !== 'no', pick)}>{busy ? 'Confirming…' : `Stake ${pick} MON on ${mySide === 'YES' ? 'yes' : 'no'}`}</button>
           <button className="text-btn" onClick={() => setAdding(false)}>Cancel</button>
         </>
       )}
@@ -420,7 +519,7 @@ function CallCard({ call, reload }: { call: Call; reload: () => void }) {
         <Avatar name={call.creator?.username} src={call.creator?.avatar} />
         <div className="txt">
           <b><span>@{call.creator?.username}</span>{call.creator?.xVerified && <Verified />}</b>
-          <span>{revealed && pool > 0 ? `${trimNum(pool, 0)} MON staked` : call.terms.source}</span>
+          <span>{authorRep && authorRep.scored > 0 ? `${call.categoryName} ${authorRep.score.toFixed(1)} · ${authorRep.won} of ${authorRep.scored} right` : 'New caller · no record yet'}</span>
         </div>
         {settled && <a className="round sm" href={`${import.meta.env.VITE_API_URL ?? ''}/api/calls/${call.id}/card.svg`} target="_blank" rel="noreferrer" aria-label="Share"><Icon name="share" /></a>}
         <button className="pillbtn" onClick={() => setSheet('terms')}>How this settles</button>

@@ -114,6 +114,13 @@ export async function mockApi(path: string, opts: { body?: any } = {}): Promise<
   }
   if (p === '/api/pools') return { pools };
   if (p === '/api/leaderboard') return { board };
-  if (p.startsWith('/api/users/')) return { username: 'ada_calls', xVerified: true, followers: 1204, following: 88, iFollow: false, reputation: [{ category: 1, name: 'Sports', score: 88.4, scored: 61, won: 44 }, { category: 0, name: 'Crypto', score: 12.5, scored: 9, won: 6 }] };
+  if (p.startsWith('/api/users/')) {
+    const name = decodeURIComponent(p.slice('/api/users/'.length));
+    const b = board.find(x => x.username === name);
+    const cats = ['Crypto', 'Sports', 'Music', 'Politics', 'Other'];
+    const home: Record<string, number> = { ada_calls: 1, monad_maxi: 0, kazzysax: 2, quietpolls: 3 };
+    return { username: name, xVerified: !!b?.xVerified, followers: 1204, following: 88, iFollow: false,
+      reputation: cats.map((n, c) => c === (home[name] ?? 0) && b ? { category: c, name: n, score: b.score, scored: b.scored, won: b.won } : { category: c, name: n, score: 0, scored: 0, won: 0 }) };
+  }
   return { ok: true };
 }

@@ -44,7 +44,7 @@ export function Shell({ initialTab = 'calls' as Tab, initialCompose = false }) {
         </div>
       </div>
 
-      {tab === 'calls' && <Calls composing={composing} setComposing={setComposing} />}
+      {tab === 'calls' && <Calls composing={composing} setComposing={setComposing} openPeople={() => go('people')} />}
       {tab === 'pools' && <Pools />}
       {tab === 'wallet' && <Deposit balance={balance} />}
       {tab === 'people' && <Leaderboard />}
