@@ -16,6 +16,7 @@ export const callsAbi = parseAbi([
   'function withdrawAuthorFees()',
   'function authorFees(address) view returns (uint256)',
   'function positions(uint256, address) view returns (uint8 side, bool scored, bool claimed, uint128 stake)',
+  'function marketCount() view returns (uint256)',
 ]);
 export const poolsAbi = parseAbi([
   'function createPool(uint8 asset, uint64 resultTime, uint256 entryAmount, bytes32 questionHash) returns (uint256)',
@@ -25,6 +26,8 @@ export const poolsAbi = parseAbi([
   'function claim(uint256 id, uint256 entryId)',
   'function claimable(uint256 id, uint256 entryId) view returns (uint256)',
   'function poolCount() view returns (uint256)',
+  'function getPool(uint256 id) view returns ((address creator, uint8 asset, bool voided, bool priced, uint64 lockTime, uint64 resultTime, uint64 pricedAt, uint128 entryAmount, uint32 entryCount, uint32 revealedCount, uint32 rankedCount, uint32 lastRankedId, bool feePaid, bytes32 questionHash, uint256 price, uint256 lastDistance))',
+  'function getEntry(uint256 id, uint256 entryId) view returns ((address entrant, bool revealed, bool ranked, bool claimed, bool scored, uint32 rank, bytes32 commitment, uint256 guess))',
   'event Entered(uint256 indexed id, uint256 indexed entryId, address indexed entrant, bytes32 commitment)',
 ]);
 

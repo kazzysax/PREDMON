@@ -7,6 +7,7 @@ import { sendAndWait } from '../wallet';
 import { Avatar, Icon, Verified, trimNum } from '../ui';
 import { squarePhoto } from '../photo';
 import { ExportWallet } from './ExportWallet';
+import { RefundCenter } from './RefundCenter';
 
 export function Profile() {
   const { me, config, account, hasX, linkX, signOut, preview } = useApp();
@@ -85,6 +86,8 @@ export function Profile() {
           }}>Collect</button>
         </div>
       )}
+
+      <RefundCenter />
 
       <p className="heading">Reputation</p>
       <div className="group">
