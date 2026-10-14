@@ -1,10 +1,11 @@
 // Wallet: balance, tips, and adding MON. Adding MON is a short, clear choice:
 // pick where it is coming from, then a token, and the widget only asks for the amount.
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { formatEther, parseEther } from 'viem';
+import { formatEther, isAddress, parseEther } from 'viem';
 import { api } from '../api';
 import { useApp } from '../ctx';
-import { sendAndWait } from '../wallet';
+import { requireStepUp, sendAndWait, walletClientFor } from '../wallet';
+import { publicClient } from '../chain';
 import { Avatar, Icon, Sheet, trimNum } from '../ui';
 
 const TopUp = lazy(() => import('./TopUp'));
@@ -27,7 +28,7 @@ const ago = (t: number) => { const s = Math.max(0, Math.floor(Date.now() / 1000)
 
 export function Deposit({ balance }: { balance: string }) {
   const { account, preview } = useApp();
-  const [sheet, setSheet] = useState<'' | 'add' | 'tip'>('');
+  const [sheet, setSheet] = useState<'' | 'add' | 'tip' | 'send'>('');
   const [tips, setTips] = useState<Tips | null>(preview ? { sent: '12', received: '31.5', recent: [
     { direction: 'received', username: 'nkechi', amount: '10', at: Math.floor(Date.now() / 1000) - 7200 },
     { direction: 'sent', username: 'thefold', amount: '5', at: Math.floor(Date.now() / 1000) - 86400 },
@@ -49,6 +50,7 @@ export function Deposit({ balance }: { balance: string }) {
           <div className="wbig">{balance === '' ? '…' : trimNum(balance)}</div>
           <div className="wunit">MON on Monad</div>
           <button className="wmini" onClick={() => setSheet('add')}><Icon name="plus" />Add MON</button>
+          <button className="wmini" onClick={() => setSheet('send')} style={{ marginTop: 6 }}><Icon name="share" />Send out</button>
         </div>
         <button className="wtile tipt" onClick={() => setSheet('tip')}>
           <div className="wtop"><span className="wbadge g"><Icon name="people" /></span><span className="wlabel">Tip</span></div>
@@ -82,6 +84,7 @@ export function Deposit({ balance }: { balance: string }) {
       )}
 
       {sheet === 'add' && <AddMon onClose={() => setSheet('')} />}
+      {sheet === 'send' && <SendOut balance={balance} onClose={() => setSheet('')} />}
       {sheet === 'tip' && <TipSheet onClose={() => setSheet('')} onSent={() => { setSheet(''); loadTips(); }} />}
     </div>
   );
@@ -168,4 +171,65 @@ async function sendValue(account: any, to: `0x${string}`, value: bigint) {
   const rc = await publicClient.waitForTransactionReceipt({ hash });
   if (rc.status !== 'success') throw new Error('The transfer failed.');
   return hash;
+}
+
+/** Withdraw: send MON from the user's PredTube wallet to any address, after a clear check of where it is going. */
+function SendOut({ balance, onClose }: { balance: string; onClose: () => void }) {
+  const { account, preview } = useApp();
+  const [to, setTo] = useState('');
+  const [amt, setAmt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState<string | null>(null);
+  const GAS_RESERVE = 0.05;
+  const max = Math.max(0, Number(balance || 0) - GAS_RESERVE);
+  const addr = to.trim();
+  const valid = isAddress(addr) && addr.toLowerCase() !== account.address.toLowerCase();
+  const n = Number(amt);
+  const ok = valid && n > 0 && n <= max;
+
+  const send = async () => {
+    setErr(''); setBusy(true);
+    try {
+      if (preview) { setDone('0xpreview'); return; }
+      await requireStepUp(n);
+      const wc = await walletClientFor(account);
+      const hash = await wc.sendTransaction({ to: addr as `0x${string}`, value: parseEther(String(n)), gas: 21_000n } as never);
+      const rc = await publicClient.waitForTransactionReceipt({ hash });
+      if (rc.status !== 'success') throw new Error('The transfer failed.');
+      setDone(hash);
+    } catch (e: any) { setErr(e.shortMessage ?? e.message ?? 'Could not send.'); } finally { setBusy(false); }
+  };
+
+  return (
+    <Sheet onClose={onClose}>
+      <h2 className="h2">Send out</h2>
+      {done ? (
+        <>
+          <p className="lede">{trimNum(String(n))} MON is on its way to {short(addr)}.</p>
+          <a className="btn quiet" href={`https://monadvision.com/tx/${done}`} target="_blank" rel="noreferrer">View on MonadVision</a>
+          <button className="text-btn" onClick={onClose}>Close</button>
+        </>
+      ) : (
+        <>
+          <p className="lede">Move MON from your PredTube wallet to any Monad address. Sends cannot be undone, so check the address.</p>
+          <label className="label" style={{ display: "block" }}>To (Monad address)
+            <input className="field" style={{ display: "block", width: "100%", marginTop: 8, boxSizing: "border-box" }} value={to} onChange={e => setTo(e.target.value)} placeholder="0x…" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+          </label>
+          {addr && !valid && <p className="err">{isAddress(addr) ? 'That is your own address.' : 'That does not look like a valid address.'}</p>}
+          <label className="label" style={{ display: "block" }}>Amount (MON)
+            <input className="field" style={{ display: "block", width: "100%", marginTop: 8, boxSizing: "border-box" }} inputMode="decimal" value={amt} onChange={e => setAmt(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.0" />
+          </label>
+          <div className="amounts">
+            <button onClick={() => setAmt(String(max))}>Max</button>
+          </div>
+          <p className="fine">Available {trimNum(String(max))} MON. A little is kept back to pay the network fee.</p>
+          {valid && n > 0 && <p className="info">You are sending <b>{trimNum(String(n))} MON</b> to <b>{addr.slice(0, 8)}…{addr.slice(-6)}</b></p>}
+          {err && <p className="err" role="alert">{err}</p>}
+          <button className="btn" disabled={!ok || busy} onClick={send}>{busy ? 'Sending…' : 'Send'}</button>
+          <button className="text-btn" onClick={onClose}>Cancel</button>
+        </>
+      )}
+    </Sheet>
+  );
 }
